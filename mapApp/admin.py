@@ -5,3 +5,4 @@ from . models import *
 admin.site.register(Car)
 admin.site.register(Passenger)
 admin.site.register(Route)
+admin.site.register(Coordinates)

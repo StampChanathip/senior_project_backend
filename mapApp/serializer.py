@@ -16,3 +16,17 @@ class CarSerializer(serializers.ModelSerializer):
         model = Car
         fields = ['timeStamp', 'carId', 'node',
                   'status', 'battery', 'passengers']
+
+
+class CoordinatesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Coordinates
+        fields = ['lattitude', 'longitude']
+
+
+class RouteSerializer(serializers.ModelSerializer):
+    coordinates = CoordinatesSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Route
+        fields = ['nodeNo', 'coordinates', 'density', 'timeStamp']
