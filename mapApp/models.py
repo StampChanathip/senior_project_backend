@@ -21,7 +21,13 @@ class Passenger(models.Model):
 
 
 class Route(models.Model):
+    timeStamp = models.TimeField(default=datetime.now, blank=True)
     nodeNo = models.CharField(max_length=20, default="0")
-    coordinates = models.IntegerField(default=0)
-    status = models.CharField(max_length=20, default="0")
     density = models.IntegerField(default=0)
+
+
+class Coordinates(models.Model):
+    routeId = models.ForeignKey(
+        Route, related_name='coordinates', on_delete=models.CASCADE)
+    lattitude = models.IntegerField(default=0)
+    longitude = models.IntegerField(default=0)

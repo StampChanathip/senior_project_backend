@@ -7,4 +7,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', car_detail),
     path('passenger', passenger_detail),
+    path('route', route_detail),
 ]
