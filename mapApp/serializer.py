@@ -5,7 +5,7 @@ from . models import *
 class PassengerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Passenger
-        fields = ['id', 'waitedTime', 'origin',
+        fields = ['waitedTime', 'origin',
                   'destination', 'pickTime', 'dropTime', 'carId']
 
 
@@ -14,7 +14,7 @@ class CarSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Car
-        fields = ['timeStamp', 'carId', 'node',
+        fields = ['carId', 'node',
                   'status', 'battery', 'passengers']
 
 
@@ -30,3 +30,10 @@ class RouteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Route
         fields = ['nodeNo', 'coordinates', 'density', 'timeStamp']
+
+
+class ImportSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+    class Meta:
+        fields = ['file']
