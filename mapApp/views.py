@@ -18,6 +18,7 @@ def car_detail(request):
 
     elif request.method == 'POST':
         try:
+            Car.objects.all().delete()
             data = request.FILES['excel_file']
             df = pd.read_excel(data, sheet_name=0, dtype=str)
             cars = []
@@ -27,10 +28,11 @@ def car_detail(request):
                 vehstatus = row['veh status']
                 car = Car(carId=carId, node=node, status=vehstatus)
                 cars.append(car)
+            car_serializer = CarSerializer(cars, many=True)
             Car.objects.bulk_create(cars)
-            return Response({'message': 'Success'}, status=status.HTTP_201_CREATED)
+            return Response({'message': 'Success', 'data': car_serializer.data}, status=status.HTTP_201_CREATED)
         except Exception:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': 'Fail'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET', 'POST'])
