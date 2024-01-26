@@ -2,10 +2,11 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
-from django.core.serializers import serialize
+from rest_framework.viewsets import ViewSet
+import pandas as pd
+
 from . models import *
 from . serializer import *
-import json
 
 
 @api_view(['GET', 'POST'])
@@ -16,38 +17,37 @@ def car_detail(request):
         return Response(car_serializer.data)
 
     elif request.method == 'POST':
-        serializer = CarSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            Car.objects.all().delete()
+            data = request.FILES['excel_file']
+            df = pd.read_excel(data, sheet_name=0, dtype=str)
+            cars = []
+            for _, row in df.iterrows():
+                carId = row['Number']
+                node = row['Node number']
+                vehstatus = row['veh status']
+                car = Car(carId=carId, node=node, status=vehstatus)
+                cars.append(car)
+            car_serializer = CarSerializer(cars, many=True)
+            Car.objects.bulk_create(cars)
+            return Response({'message': 'Success', 'data': car_serializer.data}, status=status.HTTP_201_CREATED)
+        except Exception:
+            return Response({'message': 'Fail'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET', 'POST'])
 def passenger_detail(request):
     if request.method == 'GET':
-        passenger = Passenger.objects.all()
-        serializer = PassengerSerializer(passenger, many=True)
-        return Response(serializer.data)
+        return Response()
 
     elif request.method == 'POST':
-        serializer = PassengerSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response()
 
 
 @api_view(['GET', 'POST'])
 def route_detail(request):
     if request.method == 'GET':
-        route = Route.objects.all()
-        route_serializer = RouteSerializer(route, many=True)
-        return Response(route_serializer.data)
+        return Response()
 
     elif request.method == 'POST':
-        serializer = RouteSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response()

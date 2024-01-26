@@ -7,7 +7,7 @@ class Car(models.Model):
     carId = models.CharField(max_length=20, default="1")
     node = models.CharField(max_length=20, default="0")
     status = models.CharField(max_length=20, default="0")
-    battery = models.CharField(max_length=20, default="0")
+    battery = models.IntegerField(default=100)
 
 
 class Passenger(models.Model):
