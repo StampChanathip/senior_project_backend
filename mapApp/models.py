@@ -6,7 +6,7 @@ class Car(models.Model):
     timeStamp = models.TimeField(default=datetime.now, blank=True)
     carId = models.CharField(max_length=20, default="1")
     node = models.CharField(max_length=20, default="0")
-    status = models.CharField(max_length=20, default="0")
+    status = models.CharField(max_length=200, default="0")
     battery = models.IntegerField(default=100)
 
 
