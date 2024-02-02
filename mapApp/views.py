@@ -30,11 +30,6 @@ def car_detail(request):
         return Response(car_serializer.data)
 
     elif request.method == 'POST':
-        # try:
-
-        # except Exception:
-        #     return Response({'message': 'Fail'}, status=status.HTTP_400_BAD_REQUEST)
-
         Car.objects.all().delete()
 
         data = request.FILES['excel_file']
@@ -47,13 +42,21 @@ def car_detail(request):
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
 
-        for _, nextRow in row_iterator:
+        for idx, nextRow in row_iterator:
+            # handle car details
+            isNewCar = not (int(nextRow["Index"]) - int(row["Index"]) == 1)
+            if isNewCar:
+                distance = 0
+
             nodeFrom = row["Node number"]
             nodeTo = nextRow["Node number"]
             carId = row["Number"]
             vehstatus = row['veh status']
-            distance += float(row['EMPTYTRIPLENGTH']) + \
-                float(row['SERVICELENGTH'])
+            if not pd.isna(row['EMPTYTRIPLENGTH']):
+                distance += float(row['EMPTYTRIPLENGTH']) + \
+                    float(row['SERVICELENGTH'])
+            else:
+                distance += float(row['SERVICELENGTH'])
             battery = 100 - ((distance / 120)*100)
 
             if not pd.isna(row['veh status']):
@@ -70,6 +73,7 @@ def car_detail(request):
                       status=vehstatus, battery=battery)
             cars.append(car)
 
+            # handle positions
             result = next(
                 (obj for obj in linkData
                  if (obj['nodeFrom'] == float(nodeFrom)
@@ -78,20 +82,48 @@ def car_detail(request):
                 (obj for obj in linkData
                  if (obj['nodeFrom'] == float(nodeTo)
                      and obj['nodeTo'] == float(nodeFrom))), "0")
+            lastFrom = next(
+                (obj for obj in linkData
+                 if (obj['nodeFrom'] == float(nodeFrom))), "0")
+            lastTo = next(
+                (obj for obj in linkData
+                 if (obj['nodeTo'] == float(nodeFrom))), "0")
 
-            if (result != "0"):
-                for pos in result["coordinates"]:
+            if (result != "0" and not isNewCar):
+                for pos in result["coordinates"][:-1]:
                     position = Coordinates(
                         lat=pos[1], lng=pos[0])
                     position.car = car
                     positions.append(position)
-            elif (resultReverse != "0"):
-                for pos in resultReverse["coordinates"][::-1]:
+                if (idx == df.index[-1]):
+                    pos = result["coordinates"][-1]
                     position = Coordinates(
                         lat=pos[1], lng=pos[0])
                     position.car = car
                     positions.append(position)
-#
+            elif (resultReverse != "0" and not isNewCar):
+                for pos in resultReverse["coordinates"][::-1][:-1]:
+                    position = Coordinates(
+                        lat=pos[1], lng=pos[0])
+                    position.car = car
+                    positions.append(position)
+                if (idx == df.index[-1]):
+                    pos = result["coordinates"][-1]
+                    position = Coordinates(
+                        lat=pos[1], lng=pos[0])
+                    position.car = car
+                    positions.append(position)
+            elif (isNewCar):
+                if (lastFrom != '0'):
+                    position = Coordinates(
+                        lat=lastFrom["coordinates"][0][1], lng=lastFrom["coordinates"][0][0])
+                    position.car = car
+                    positions.append(position)
+                elif (lastTo != '0'):
+                    position = Coordinates(
+                        lat=lastTo["coordinates"][-1][1], lng=lastTo["coordinates"][-1][0])
+                    position.car = car
+                    positions.append(position)
             row = nextRow
 
         Car.objects.bulk_create(cars)
