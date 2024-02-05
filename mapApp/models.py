@@ -19,13 +19,15 @@ class Coordinates(models.Model):
 
 
 class Passenger(models.Model):
-    waitedTime = models.IntegerField(default=0)
-    origin = models.CharField(max_length=20, default="0")
-    destination = models.CharField(max_length=20, default="0")
+    callTime = models.TimeField(default=datetime.now, blank=True)
     pickTime = models.TimeField(default=datetime.now, blank=True)
     dropTime = models.TimeField(default=datetime.now, blank=True)
+    nodeTo = models.CharField(max_length=20, default="0")
+    nodeFrom = models.CharField(max_length=20, default="0")
+    waitedTime = models.IntegerField(default=0)
+    amount = models.IntegerField(default=0)
     carId = models.ForeignKey(
-        Car, related_name='passengers', on_delete=models.CASCADE)
+        Car, related_name='passengers', on_delete=models.CASCADE, default=1)
 
 
 class Route(models.Model):
