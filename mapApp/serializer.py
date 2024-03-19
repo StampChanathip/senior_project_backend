@@ -6,7 +6,7 @@ class PassengerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Passenger
         fields = ['callTime', 'nodeFrom', 'nodeTo',
-                  'amount', 'carId', 'pickTime', 'dropTime', 'waitedTime']
+                  'amount', 'pickTime', 'dropTime', 'waitedTime']
 
 
 class PositionsSerializer(serializers.ModelSerializer):
@@ -15,15 +15,20 @@ class PositionsSerializer(serializers.ModelSerializer):
         fields = ['lat', 'lng']
 
 
+class LinkSerializer(serializers.ModelSerializer):
+    coordinates = PositionsSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Link
+        fields = ['nodeFrom', 'nodeTo', 'coordinates']
+        
 class CarSerializer(serializers.ModelSerializer):
     passengers = PassengerSerializer(many=True, read_only=True)
-    positions = PositionsSerializer(many=True, read_only=True)
+    link = LinkSerializer()
 
     class Meta:
         model = Car
-        fields = ['carId', 'nodeFrom', 'nodeTo',
-                  'status', 'battery', 'passengers', 'positions']
-
+        fields = ['carId','status', 'battery', 'arrivalTime', "departureTime", 'passengerChange', 'passengers', 'link']
 
 class RouteSerializer(serializers.ModelSerializer):
 
