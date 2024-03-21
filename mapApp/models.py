@@ -34,6 +34,11 @@ class Passenger(models.Model):
     car = models.ForeignKey(
         Car, related_name='passengers', on_delete=models.CASCADE, default=1)
 
+class Demand(models.Model):
+    callTime = models.TimeField(default=datetime.now, blank=True)
+    nodeTo = models.CharField(max_length=20, default="0")
+    nodeFrom = models.CharField(max_length=20, default="0")
+    amount = models.IntegerField(default=0)
 
 class Route(models.Model):
     timeStamp = models.TimeField(default=datetime.now, blank=True)

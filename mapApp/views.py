@@ -26,9 +26,7 @@ def read_json(path):
 
 @api_view(['GET', 'POST'])
 def car_detail(request):
-    linkData = read_json('senior_project/MockData/linkCoor.json')
-    demandData = read_json('senior_project/MockData/demandData.json')
-    
+
     if request.method == 'GET':
         car = Car.objects.all()
         car_serializer = CarSerializer(car, many=True)
@@ -36,14 +34,13 @@ def car_detail(request):
 
     elif request.method == 'POST':
         Car.objects.all().delete()
+        # Passenger.objects.all().delete()
 
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
 
         cars = []
-        positions = []
         distance = 0
-        carPassenger = []
 
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
@@ -90,7 +87,8 @@ def car_detail(request):
                 distance = 0
                 battery = 100
 
-            car = Car(carId=carId, status=vehstatus, battery=battery, arrivalTime=arrivalTime, departureTime=departureTime, passengerChange=passengerChange)
+            car = Car(carId=carId, status=vehstatus, battery=battery, arrivalTime=arrivalTime,
+                      departureTime=departureTime, passengerChange=passengerChange)
 
             # handle positions
             if not isNewCar:
@@ -98,80 +96,12 @@ def car_detail(request):
                 car.link = link
                 cars.append(car)
             row = nextRow
-            
-            # TODO: handle passenger
-            # demandIndex = 0
-            # passengers = []
-            # if row["Is profile point"] == "1":
-            #     # get passengers from previous car
-            #     if (len(carPassenger) > 0):
-            #         prevCarPassenger = carPassenger[-1]
-            #         prevPassCount = sum([passenger.amount
-            #                             for passenger in prevCarPassenger])
-            #         if (len(prevCarPassenger) > 0 and prevPassCount <= 6):
-            #             for each in prevCarPassenger:
-            #                 passenger = deepcopy(each)
-            #                 passenger.car = car
-            #                 passengers.append(passenger)
-
-            #     pickCount = 0
-            #     dropCount = 0
-
-            #     # drop passenger
-            #     copyPass = passengers.copy()
-            #     for each in copyPass:
-            #         isCarDrop = (
-            #             car.nodeFrom == each.nodeTo and passengerChange >= dropCount)
-            #     if (isCarDrop):
-            #         dropCount += each.amount
-            #         passengers.remove(each)
-
-            #         # pick passenger
-            #     for i in range(demandIndex, len(demandData)):
-            #         demand = demandData[i]
-            #         dt = datetime.now()
-
-            #         callTime = datetime.strptime(
-            #             demand['callTime'], "%H:%M:%S")
-            #         minWaitedTime = (dt.combine(
-            #             dt, arrivalTime) - dt.combine(dt, callTime.time())).total_seconds()
-            #         maxWaitedTime = (dt.combine(
-            #             dt, departureTime) - dt.combine(dt, callTime.time())).total_seconds()
-
-            #         nodePassFrom = demand["nodeFrom"]
-            #         nodePassTo = demand["nodeTo"]
-            #         # max wait time = 10 min
-            #         isCarPick = (
-            #             car.nodeFrom == nodePassFrom and ((minWaitedTime <= 600 and minWaitedTime > 0) or (maxWaitedTime <= 600 and maxWaitedTime > 0)) and passengerChange >= pickCount + demand['amount'])
-            #     if (isCarPick):
-            #         pickCount += demand['amount']
-            #         demandIndex += 1
-            #         passenger = Passenger(
-            #             nodeFrom=nodePassFrom, nodeTo=nodePassTo, callTime=callTime, amount=demand['amount'], car=car, pickTime=arrivalTime, waitedTime=minWaitedTime)
-            #         passengers.append(passenger)
-
-            #     carPassenger.append(passengers)
-            # elif row["Is profile point"] == "0":
-            #     if (len(carPassenger) > 0):
-            #         prevCarPassenger = carPassenger[-1]
-            #         prevPassCount = sum([passenger.amount
-            #                             for passenger in prevCarPassenger])
-            #         if (len(prevCarPassenger) > 0 and prevPassCount <= 6):
-            #             for each in prevCarPassenger:
-            #                 passenger = deepcopy(each)
-            #                 passenger.car = car
-            #                 passengers.append(passenger)
-            #     vehstatus = "run"
-            #     carPassenger.append(passengers)
 
         Car.objects.bulk_create(cars)
-        # for each in carPassenger:
-        #     if (len(each) > 0):
-        #         Passenger.objects.bulk_create(each)
 
-        car1 = Car.objects.all()
-        car_serializer = CarSerializer(car1, many=True)
-        return Response({'message': 'Success', 'data': car_serializer.data}, status=status.HTTP_201_CREATED)
+        # car1 = Car.objects.all()
+        # car_serializer = CarSerializer(car1, many=True)
+        return Response({'message': 'Success'}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET', 'POST'])
@@ -181,36 +111,77 @@ def passenger_detail(request):
 
     elif request.method == 'POST':
         Passenger.objects.all().delete()
-        demandData = read_json('senior_project/MockData/demandData.json')
-
-        cars = []
-        dropCars = []
-        for demand in demandData:
+        carsAll = Car.objects.all()
+        carPassenger = []
+        for i in range(1, len(carsAll)):
             dt = datetime.now()
+            passengers = []
+            pickCount = 0
+            dropCount = 0
 
-            callTime = datetime.strptime(
-                demand['callTime'], "%H:%M:%S")
+            car = carsAll[i]
+            prevCar = carsAll[i - 1]
 
-            desiredTime = callTime + timedelta(minutes=5)
-            desiredArriveTime = callTime + timedelta(hours=1)
+            # get previous car passenger
+            if (i > 1):
+                prevCarPassenger = Passenger.objects.filter(car=prevCar)
+                prevPassCount = sum([passenger.amount
+                                    for passenger in prevCarPassenger])
+                if (len(prevCarPassenger) > 0 and prevPassCount <= 6):
+                    for each in prevCarPassenger:
+                        passenger = Passenger(car=car, nodeFrom=each.nodeFrom, nodeTo=each.nodeTo,
+                                              amount=each.amount, callTime=each.callTime, pickTime=each.pickTime, dropTime=each.dropTime, waitedTime=each.waitedTime)
+                        passengers.append(passenger)
 
-            nodePassFrom = demand["nodeFrom"]
-            nodePassTo = demand["nodeTo"]
+            if (car.status == "pick"):
+                desiredTime = (dt.combine(dt, car.arrivalTime) -
+                               timedelta(minutes=10)).time()
+                
+                pickDemand = Demand.objects.filter(nodeFrom=car.link.nodeFrom, callTime__range=[
+                                                   desiredTime, car.arrivalTime], amount__range=[0, car.passengerChange]).order_by('-amount')
 
-            pickCar = Car.objects.filter(nodeFrom=nodePassFrom, arrivalTime__range=[
-                callTime, desiredTime], status="pick", passengerChange=demand['amount'])
+                for demand in pickDemand:
+                    # check is there actually a car that drop this demand and get dropTime
+                    dropCar = Car.objects.filter(link__nodeFrom=demand.nodeTo, arrivalTime__range=[
+                                                 car.arrivalTime, datetime(2024, 1, 1, 21, 30, 00).time()])
+                    if dropCar:
+                        pickCount += demand.amount
+                        if pickCount > car.passengerChange:
+                            break
 
-            for car in pickCar:
+                        waitedTime = (dt.combine(dt, car.arrivalTime) -
+                                      dt.combine(dt, demand.callTime)).total_seconds()
+                        passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
+                                              amount=demand.amount, callTime=demand.callTime, pickTime=car.arrivalTime, dropTime=dropCar[0].arrivalTime, waitedTime=waitedTime)
+                        passengers.append(passenger)
 
-                waitedTime = (dt.combine(
-                    dt, car.arrivalTime) - dt.combine(dt, callTime.time())).total_seconds()
+            elif (car.status == "drop"):
+                copyPass = passengers.copy()
+                for each in copyPass:
+                    dropCount -= each.amount
+                    isCarDrop = (
+                        car.link.nodeFrom == each.nodeTo)
+                    if (isCarDrop):
+                        passengers.remove(each)
+                if dropCount != car.passengerChange:
+                    # Case: Pick and drop at the same node
+                    desiredTime = (dt.combine(dt, car.departureTime) -
+                                   timedelta(minutes=10)).time()
+                    pickDemand = Demand.objects.filter(nodeFrom=car.link.nodeFrom, callTime__range=[
+                        desiredTime, car.departureTime], amount__range=[0, (car.passengerChange - dropCount)])
+                    for demand in pickDemand:
+                        pickCount += demand.amount
+                        if pickCount > (car.passengerChange - dropCount):
+                            break
+                        waitedTime = (dt.combine(dt, car.departureTime) -
+                                      dt.combine(dt, demand.callTime)).total_seconds()
+                        passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
+                                              amount=demand.amount, callTime=demand.callTime, pickTime=car.departureTime, waitedTime=waitedTime)
+                        passengers.append(passenger)
+            Passenger.objects.bulk_create(passengers)
+            carPassenger.append(passengers)
 
-                passenger = Passenger(
-                    nodeFrom=nodePassFrom, nodeTo=nodePassTo, callTime=callTime, amount=demand['amount'], car=car, pickTime=car.arrivalTime, waitedTime=waitedTime)
-                passenger.save()
-
-        passengerData = PassengerSerializer(Passenger.objects.all(), many=True)
-        carsData = CarSerializer(Car.objects.filter(status="pick"), many=True)
+        carsData = CarSerializer(carsAll, many=True)
         return Response({'message': 'Success', 'car': carsData.data}, status=status.HTTP_201_CREATED)
 
 
@@ -221,7 +192,28 @@ def route_detail(request):
 
     elif request.method == 'POST':
         return Response()
-    
+
+
+@api_view(['GET', 'POST'])
+def demand_detail(request):
+    demandData = read_json('senior_project/MockData/demandData.json')
+    if request.method == 'GET':
+        demand = Demand.objects.all()
+        demand_serializer = DemandSerializer(demand, many=True)
+        return Response({'message': 'Success', 'data': demand_serializer.data}, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        Demand.objects.all().delete()
+        for demand in demandData:
+            callTime = datetime.strptime(demand['callTime'], "%H:%M:%S")
+            newDemand = Demand(
+                callTime=callTime, nodeFrom=demand["nodeFrom"], nodeTo=demand["nodeTo"], amount=demand['amount'])
+            newDemand.save()
+        demands = Demand.objects.all()
+        demand_serializer = DemandSerializer(demands, many=True)
+        return Response({'message': 'Success', 'data': demand_serializer.data}, status=status.HTTP_201_CREATED)
+
+
 @api_view(['GET', 'POST'])
 def link_detail(request):
     linkData = read_json('senior_project/MockData/linkCoor.json')

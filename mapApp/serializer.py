@@ -5,8 +5,8 @@ from . models import *
 class PassengerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Passenger
-        fields = ['callTime', 'nodeFrom', 'nodeTo',
-                  'amount', 'pickTime', 'dropTime', 'waitedTime']
+        fields = ['nodeFrom', 'nodeTo',
+                  'amount', 'callTime', 'pickTime', 'dropTime', 'waitedTime']
 
 
 class PositionsSerializer(serializers.ModelSerializer):
@@ -28,10 +28,15 @@ class CarSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Car
-        fields = ['carId','status', 'battery', 'arrivalTime', "departureTime", 'passengerChange', 'passengers', 'link']
+        fields = ['carId','status', 'battery', 'arrivalTime', "departureTime", 'passengerChange', 'link', 'passengers']
 
 class RouteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Route
         fields = ['nodeNo', 'coordinates', 'density', 'timeStamp']
+
+class DemandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Demand
+        fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
