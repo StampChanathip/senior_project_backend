@@ -67,6 +67,8 @@ def car_detail(request):
             if not pd.isna(row['Relative arrival time']):
                 arrivalTime = (datetime.strptime(
                     row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+            elif len(cars) > 1:
+                arrivalTime = cars[-1].arrivalTime
             else:
                 arrivalTime = (datetime(
                     2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30)).time()
@@ -74,6 +76,8 @@ def car_detail(request):
             if not pd.isna(row['Relative departure time']):
                 departureTime = (datetime.strptime(
                     row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+            elif len(cars) > 1:
+                departureTime = cars[-1].departureTime
 
             if not pd.isna(row['EMPTYTRIPLENGTH']):
                 distance += float(row['EMPTYTRIPLENGTH']) + \
