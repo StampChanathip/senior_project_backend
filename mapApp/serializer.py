@@ -40,3 +40,8 @@ class DemandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Demand
         fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
+
+class DashboardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DashboardData
+        fields = ['totalArrivalTime', 'totalDepartureTime', 'totalChargingTime', 'totalStopTime', 'totalPostTravel']

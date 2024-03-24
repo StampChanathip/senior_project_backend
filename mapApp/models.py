@@ -44,3 +44,10 @@ class Route(models.Model):
     timeStamp = models.TimeField(default=datetime.now, blank=True)
     nodeNo = models.CharField(max_length=20, default="0")
     density = models.IntegerField(default=0)
+
+class DashboardData(models.Model):
+    totalArrivalTime = models.TimeField(default=datetime.now, blank=True)
+    totalDepartureTime = models.TimeField(default=datetime.now, blank=True)
+    totalStopTime = models.TimeField(default=datetime.now, blank=True)
+    totalPostTravelTime = models.TimeField(default=datetime.now, blank=True)
+    totalChargingTime = models.TimeField(default=datetime.now, blank=True)

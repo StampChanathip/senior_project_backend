@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timedelta
 from django.db.models import Count
 from copy import deepcopy
+import xlrd
 
 from . models import *
 from . serializer import *
@@ -244,3 +245,93 @@ def link_detail(request):
         link = Link.objects.all()
         link_serializer = LinkSerializer(link, many=True)
         return Response({'message': 'Success', 'data': link_serializer.data}, status=status.HTTP_201_CREATED)
+    
+@api_view(['GET', 'POST'])
+def dashboard(request):
+    if request.method == 'GET':
+        return Response()
+
+    elif request.method == 'POST':
+        dt = datetime.now()
+        data = request.FILES['excel_file']
+        df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
+        row_iterator = df.iterrows()
+        _, row = next(row_iterator)
+
+        arrival_time = timedelta()
+        departure_time = timedelta()
+        stop_time = timedelta()
+        post_travel_time = timedelta()
+        charging_time = timedelta()
+
+        for idx, nextRow in row_iterator:
+            if not pd.isna(row['Relative arrival time']):
+                if arrival_time:
+                    arrivalTime = (datetime.strptime(
+                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                    # relative_arrival_time = (datetime.strptime(
+                    #     row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                    # arrival_time = (dt.combine(dt, arrival_time) + dt.combine(dt, relative_arrival_time)).time()
+                
+            # if not pd.isna(row['Relative departure time']):
+            #     if departure_time:
+            #         relative_departure_time = (datetime.strptime(
+            #             row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+            #         departure_time = (dt.combine(dt, departure_time) + dt.combine(dt, relative_departure_time)).time()
+            
+            # if not pd.isna(row['Stop time']):
+            #     stop_time_delta = timedelta()
+            #     stop_time_str = row['Stop time']
+            #     stop_time_split = stop_time_str.split()
+            #     minutes = 0
+            #     seconds = 0
+            #     for part in stop_time_split:
+            #         if 'min' in part:
+            #             minutes = int(part.replace('min', ''))
+            #         elif 's' in part:
+            #             seconds = int(part.replace('s', ''))
+            #     stop_time_delta = timedelta(minutes=minutes, seconds=seconds)
+            #     if stop_time:
+            #         stop_time += stop_time_delta
+            
+            # if not pd.isna(row['Post travel time']):
+            #     post_travel_time_delta = timedelta()
+            #     post_travel_time_str = row['Post travel time']
+            #     post_travel_time_split = post_travel_time_str.split()
+            #     minutes = 0
+            #     seconds = 0
+            #     for part in post_travel_time_split:
+            #         if 'min' in part:
+            #             minutes = int(part.replace('min', ''))
+            #         elif 's' in part:
+            #             seconds = int(part.replace('s', ''))
+            #     post_travel_time_delta = timedelta(minutes=minutes, seconds=seconds)
+            #     if post_travel_time:
+            #         post_travel_time += post_travel_time_delta
+
+            # if not pd.isna(row['Time spent at charging area']):
+            #     charging_time_delta = timedelta()
+            #     charging_time_str = row['Time spent at charging area']
+            #     charging_time_split = charging_time_str.split()
+            #     minutes = 0
+            #     seconds = 0
+            #     for part in charging_time_split:
+            #         if 'min' in part:
+            #             minutes = int(part.replace('min', ''))
+            #         elif 's' in part:
+            #             seconds = int(part.replace('s', ''))
+            #     charging_time_delta = timedelta(minutes=minutes, seconds=seconds)
+            #     if charging_time:
+            #         charging_time += charging_time_delta
+        
+            row = nextRow
+        dashboardData = DashboardData(totalArrivalTime=arrival_time, totalDepartureTime=departure_time, totalChargingTime=charging_time,
+                                      totalPostTravelTime=post_travel_time, totalStopTime=stop_time)
+        dashboardData.save()
+        # dashboard = DashboardData.objects.all()
+        dashboard_serializer = DashboardSerializer(dashboardData)
+        return Response({'message': 'Success', 'data': dashboard_serializer.data}, status=status.HTTP_201_CREATED)
+                
+            
+
+       
