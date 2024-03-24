@@ -8,5 +8,7 @@ urlpatterns = [
     path('', car_detail),
     path('passenger', passenger_detail),
     path('route', route_detail),
+    path('link', link_detail),
+    path('demand', demand_detail),
     path("__debug__/", include("debug_toolbar.urls")),
 ]
