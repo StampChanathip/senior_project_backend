@@ -1,0 +1,109 @@
+import xlrd
+from datetime import datetime, timedelta
+
+# Open the Excel file
+workbook = xlrd.open_workbook("D:\\Year 4\\project\\path item for visualization simp.xlsx")
+
+# Access the desired sheet
+sheet = workbook.sheet_by_index(4)  # Assuming the 5th sheet
+
+# Find the column index for "Number", "Relative arrival time", "Stop time", and "EMPTYTRIPLENGTH"
+number_col_index = None
+arrival_time_col_index = None
+stop_time_col_index = None
+empty_trip_length_col_index = None
+
+# Check the first two rows for headers
+for row_index in range(2):
+    for col_index in range(sheet.ncols):
+        cell_value = str(sheet.cell_value(row_index, col_index)).strip().lower()
+        if cell_value == "number":
+            number_col_index = col_index
+        elif cell_value == "relative arrival time":
+            arrival_time_col_index = col_index
+        elif cell_value == "stop time":
+            stop_time_col_index = col_index
+        elif cell_value == "emptytriplength":
+            empty_trip_length_col_index = col_index
+
+# if number_col_index is None or arrival_time_col_index is None or stop_time_col_index is None or empty_trip_length_col_index is None:
+#     print("Error: One or more of the required columns not found in the Excel sheet.")
+#     exit()
+
+# print("Column indices found:")
+# print(f"Number column index: {number_col_index}")
+# print(f"Relative arrival time column index: {arrival_time_col_index}")
+# print(f"Stop time column index: {stop_time_col_index}")
+# print(f"Empty Trip Length column index: {empty_trip_length_col_index}")
+
+from math import floor
+
+# Iterate through each row to collect time data for charging vehicles
+charging_time_data = {}  # Dictionary to store charging time data by vehicle number
+time_for_charging_data = {}  # Dictionary to store time for charging data by vehicle number
+empty_trip_length_data = {}  # Dictionary to store empty trip length data by vehicle number
+
+for row_index in range(2, sheet.nrows):  # Start from the third row since the headers are in the first two rows
+    # Check if the vehicle is charging
+    charging_status = sheet.cell_value(row_index, 23)  # Assuming column X is at index 23
+    if charging_status.strip().lower() == "charging":
+        # Get vehicle number
+        vehicle_number = int(sheet.cell_value(row_index, number_col_index))
+
+        # Get charging time (in decimal hours)
+        charging_time_decimal = float(sheet.cell_value(row_index, arrival_time_col_index))
+        hours, remainder = divmod(charging_time_decimal * 24, 1)
+        minutes, seconds = divmod(remainder * 60, 1)
+        seconds *= 60  # Convert fractional minutes to seconds
+        seconds = floor(seconds)  # Round down to the nearest second
+        charging_time = datetime.min + timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds))
+
+        # Store the charging time for the vehicle, removing duplicates
+        if vehicle_number not in charging_time_data:
+            charging_time_data[vehicle_number] = []  # Using a list to store multiple charging times
+        charging_time_data[vehicle_number].append(charging_time.time())
+
+        # Get stop time
+        stop_time_str = sheet.cell_value(row_index, stop_time_col_index)
+        stop_time_parts = stop_time_str.split()
+        total_seconds = 0
+        for part in stop_time_parts:
+            if part.endswith("s"):
+                total_seconds += int(part[:-1])
+            elif part.endswith("min"):
+                total_seconds += int(part[:-3]) * 60
+        time_for_charging = timedelta(seconds=total_seconds)
+
+        # Store the time for charging for the vehicle
+        if vehicle_number not in time_for_charging_data:
+            time_for_charging_data[vehicle_number] = []  # Using a list to store multiple time for charging
+        time_for_charging_data[vehicle_number].append(time_for_charging)
+
+        # Get empty trip length
+        empty_trip_length = float(sheet.cell_value(row_index, empty_trip_length_col_index))
+        
+        empty_trip_length_str = sheet.cell_value(row_index, empty_trip_length_col_index)
+        if empty_trip_length_str:  # Check if the cell is not empty
+            empty_trip_length = float(empty_trip_length_str)
+        else:
+            empty_trip_length = 0.0
+
+        # Store the empty trip length for the vehicle
+        if vehicle_number not in empty_trip_length_data:
+            empty_trip_length_data[vehicle_number] = 0
+        empty_trip_length_data[vehicle_number] += empty_trip_length
+
+# Print the collected data
+print("Charging, Time for Charging, and Empty Trip Length data:")
+for vehicle_number in sorted(charging_time_data.keys()):
+    print(f"Vehicle {vehicle_number}:")
+    charging_times = charging_time_data[vehicle_number]
+    time_for_charging_times = time_for_charging_data.get(vehicle_number, [])
+    total_empty_trip_length = empty_trip_length_data.get(vehicle_number, 0)
+
+    for i, (charging_time, time_for_charging) in enumerate(zip(charging_times, time_for_charging_times), start=1):
+        print(f"  Charging count: {i}")
+        print(f"    Arrival Time: {charging_time.strftime('%H:%M:%S')}")
+        print(f"    Time for Charging: {time_for_charging}")
+    
+    print(f"  Empty Trip Length for Charging: {total_empty_trip_length} km")
