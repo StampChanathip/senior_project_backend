@@ -97,8 +97,8 @@ def car_detail(request):
 
             # handle positions
             if not isNewCar:
-                link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
-                car.link = link
+                # link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
+                # car.link = link
                 cars.append(car)
             row = nextRow
 
@@ -234,14 +234,14 @@ def link_detail(request):
                 coordinate = Coordinates(lat=coor[1], lng=coor[0])
                 coordinate.link = linkCoor
                 coordinate.save()
-        for link in linkData:
-            linkCoor = Link(nodeFrom=link["nodeTo"], nodeTo=link["nodeFrom"])
-            linkCoor.save()
-            coorReverse = link['coordinates'][::-1]
-            for coor in coorReverse:
-                coordinate = Coordinates(lat=coor[1], lng=coor[0])
-                coordinate.link = linkCoor
-                coordinate.save()
+        # for link in linkData:
+        #     linkCoor = Link(nodeFrom=link["nodeTo"], nodeTo=link["nodeFrom"])
+        #     linkCoor.save()
+        #     coorReverse = link['coordinates'][::-1]
+        #     for coor in coorReverse:
+        #         coordinate = Coordinates(lat=coor[1], lng=coor[0])
+        #         coordinate.link = linkCoor
+        #         coordinate.save()
         link = Link.objects.all()
         link_serializer = LinkSerializer(link, many=True)
         return Response({'message': 'Success', 'data': link_serializer.data}, status=status.HTTP_201_CREATED)
