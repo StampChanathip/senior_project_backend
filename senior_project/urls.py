@@ -11,5 +11,6 @@ urlpatterns = [
     path('link', link_detail),
     path('demand', demand_detail),
     path('dashboard', dashboard),
+    path('passenger_check', passenger_check),
     path("__debug__/", include("debug_toolbar.urls")),
 ]

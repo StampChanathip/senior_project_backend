@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from django.db.models import Count
 from copy import deepcopy
 import xlrd
+import pytz
 
 from . models import *
 from . serializer import *
@@ -26,8 +27,9 @@ def read_json(path):
 
 
 def handle_passenger():
+    Route.objects.all().delete()
     Passenger.objects.all().delete()
-    carsAll = Car.objects.all()
+    carsAll = CarProperties.objects.all()
     for i in range(1, len(carsAll)):
         dt = datetime.now()
         passengers = []
@@ -54,20 +56,19 @@ def handle_passenger():
 
         if (car.status == "pick"):
             desiredTime = (dt.combine(dt, car.arrivalTime) -
-                           timedelta(minutes=10)).time()
+                           timedelta(minutes=9, seconds=50)).time()
 
-            pickDemand = Demand.objects.filter(nodeFrom=car.link.nodeFrom, callTime__range=[
+            pickDemand = Demand.objects.filter(nodeFrom=car.nodeFrom, callTime__range=[
                                                desiredTime, car.arrivalTime], amount__range=[0, car.passengerChange]).order_by('-amount')
 
             for demand in pickDemand:
                 # check is there actually a car that drop this demand and get dropTime
-                dropCar = Car.objects.filter(link__nodeFrom=demand.nodeTo, arrivalTime__range=[
-                                             car.arrivalTime, datetime(2024, 1, 1, 21, 30, 00).time()])
+                dropCar = CarProperties.objects.filter(nodeFrom=demand.nodeTo, arrivalTime__range=[
+                    car.arrivalTime, datetime(2024, 1, 1, 21, 30, 00).time()])
                 if dropCar:
                     pickCount += demand.amount
                     if pickCount > car.passengerChange:
                         break
-
                     waitedTime = (dt.combine(dt, car.arrivalTime) -
                                   dt.combine(dt, demand.callTime)).total_seconds()
                     passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
@@ -79,14 +80,14 @@ def handle_passenger():
             for each in copyPass:
                 dropCount -= each.amount
                 isCarDrop = (
-                    car.link.nodeFrom == each.nodeTo)
+                    car.nodeFrom == each.nodeTo)
                 if (isCarDrop):
                     passengers.remove(each)
             if dropCount != car.passengerChange:
                 # Case: Pick and drop at the same node
                 desiredTime = (dt.combine(dt, car.departureTime) -
                                timedelta(minutes=10)).time()
-                pickDemand = Demand.objects.filter(nodeFrom=car.link.nodeFrom, callTime__range=[
+                pickDemand = Demand.objects.filter(nodeFrom=car.nodeFrom, callTime__range=[
                     desiredTime, car.departureTime], amount__range=[0, (car.passengerChange - dropCount)])
                 for demand in pickDemand:
                     pickCount += demand.amount
@@ -98,7 +99,6 @@ def handle_passenger():
                                           amount=demand.amount, callTime=demand.callTime, pickTime=car.departureTime, waitedTime=waitedTime)
                     passengers.append(passenger)
         Passenger.objects.bulk_create(passengers)
-
 
 @api_view(['GET', 'POST'])
 def car_detail(request):
@@ -114,73 +114,100 @@ def car_detail(request):
 
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
-
-        cars = []
+        dt = datetime(2024, 1, 1, 00, 00, 00)
+        carProps = []
+        routeProps = []
         distance = 0
+        positions = []
 
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
-
+        lastChargeTime = (dt + timedelta(hours=6, minutes=30))
         for idx, nextRow in row_iterator:
-
-            # handle car details
+            # handle car properties
             isNewCar = not (int(nextRow["Index"]) - int(row["Index"]) == 1)
             if isNewCar:
+                positions = []
                 distance = 0
-
+                lastChargeTime = (dt + timedelta(hours=6, minutes=30))
+            
+            isProfilePoint = row["Is profile point"] == '1'
             nodeFrom = row["Node number"]
             nodeTo = nextRow["Node number"]
 
-            if int(idx) - 1 > 0:
-                passengerChange = int(df.loc[int(
-                    idx) - 1, 'Post occupancy']) - int(df.loc[int(idx) - 2, 'Post occupancy'])
+            if isProfilePoint:
+               
+                if int(idx) - 1 > 0:
+                    passengerChange = int(df.loc[int(
+                        idx) - 1, 'Post occupancy']) - int(df.loc[int(idx) - 2, 'Post occupancy'])
+                else:
+                    passengerChange = 0
+
+                carId = row["Number"]
+                vehstatus = row['veh status']
+                
+                if len(carProps) > 0:
+                    if not (carProps[-1].carId != carId):
+                        lastChargeTime = carProps[-1].lastChargeTime
+                    else:
+                        lastChargeTime = (datetime(
+                        2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30))
+                if not pd.isna(row['Relative arrival time']):
+                    time = dt.combine(dt, (datetime.strptime(
+                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
+                    arrivalTime = (datetime.strptime(
+                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                else:
+                    time = (dt + timedelta(hours=6, minutes=30))
+                    arrivalTime = (dt + timedelta(hours=6, minutes=30)).time()
+
+                if not pd.isna(row['Relative departure time']):
+                    departureTime = (datetime.strptime(
+                        row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+
+                if not pd.isna(row['EMPTYTRIPLENGTH']):
+                    distance += float(row['EMPTYTRIPLENGTH']) + \
+                        float(row['SERVICELENGTH'])
+                else:
+                    distance += float(row['SERVICELENGTH'])
+                    
+                battery = 100 - ((distance / 120)*100)
+
+                if not pd.isna(row['Time spent at charging area']):
+                    vehstatus = 'charging'
+                    lastChargeTime = dt.combine(dt, (datetime.strptime(
+                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
+                    distance = 0
+                    battery = 100
+
+                # handle positions
+                if not isNewCar:
+
+                    link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
+                    geom = {"type": "LineString", "coordinates": [
+                        *link.geom.get('coordinates')]}
+                    car = Car(geometry=geom)
+                    car.save()
+
+                    carProp = CarProperties(car=car, carId=carId, nodeFrom=nodeFrom, nodeTo=nodeTo, status=vehstatus, battery=battery, time=time,
+                                            arrivalTime=arrivalTime, departureTime=departureTime, lastChargeTime=lastChargeTime, passengerChange=passengerChange, passedLink=positions)
+                    carProp.save()
+                    carProps.append(carProp)
+                    positions = []
+                    
             else:
-                passengerChange = 0
+                if not isNewCar:
+                    link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
+                    for each in link.geom.get('coordinates'):
+                        positions.append(each)
 
-            carId = row["Number"]
-            vehstatus = row['veh status']
-
-            if not pd.isna(row['Relative arrival time']):
-                arrivalTime = (datetime.strptime(
-                    row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-            elif len(cars) > 1:
-                arrivalTime = cars[-1].arrivalTime
-            else:
-                arrivalTime = (datetime(
-                    2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30)).time()
-
-            if not pd.isna(row['Relative departure time']):
-                departureTime = (datetime.strptime(
-                    row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-            elif len(cars) > 1:
-                departureTime = cars[-1].departureTime
-
-            if not pd.isna(row['EMPTYTRIPLENGTH']):
-                distance += float(row['EMPTYTRIPLENGTH']) + \
-                    float(row['SERVICELENGTH'])
-            else:
-                distance += float(row['SERVICELENGTH'])
-            battery = 100 - ((distance / 120)*100)
-
-            if not pd.isna(row['Time spent at charging area']):
-                vehstatus = 'charging'
-                distance = 0
-                battery = 100
-
-            car = Car(carId=carId, status=vehstatus, battery=battery, arrivalTime=arrivalTime,
-                      departureTime=departureTime, passengerChange=passengerChange)
-
-            # handle positions
-            if not isNewCar:
-                link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
-                car.link = link
-                cars.append(car)
             row = nextRow
 
-        Car.objects.bulk_create(cars)
+        # CarProperties.objects.bulk_create(carProps)
+        RouteProperties.objects.bulk_create(routeProps)
         handle_passenger()
-        
-        car1 = Car.objects.all()
+
+        car1 = Car.objects.all().order_by('properties__time')
         car_serializer = CarSerializer(car1, many=True)
         return Response({'message': 'Success', "data": car_serializer.data}, status=status.HTTP_201_CREATED)
 
@@ -188,90 +215,20 @@ def car_detail(request):
 @api_view(['GET', 'POST'])
 def passenger_detail(request):
     if request.method == 'GET':
-        return Response()
+        passengers = Passenger.objects.all()
+        passengers_serializer = PassengerSerializer(passengers, many=True)
+        return Response({'message': 'Success', 'data': passengers_serializer.data}, status=status.HTTP_200_OK)
 
     elif request.method == 'POST':
-        Passenger.objects.all().delete()
-        carsAll = Car.objects.all()
-        for i in range(1, len(carsAll)):
-            dt = datetime.now()
-            passengers = []
-            pickCount = 0
-            dropCount = 0
-            isNewCar = False
-
-            car = carsAll[i]
-            prevCar = carsAll[i - 1]
-
-            if car.carId != prevCar.carId:
-                isNewCar = True
-
-            # get previous car passenger
-            if (i > 1):
-                prevCarPassenger = Passenger.objects.filter(car=prevCar)
-                prevPassCount = sum([passenger.amount
-                                    for passenger in prevCarPassenger])
-                if (len(prevCarPassenger) > 0 and prevPassCount <= 6 and not isNewCar):
-                    for each in prevCarPassenger:
-                        passenger = Passenger(car=car, nodeFrom=each.nodeFrom, nodeTo=each.nodeTo,
-                                              amount=each.amount, callTime=each.callTime, pickTime=each.pickTime, dropTime=each.dropTime, waitedTime=each.waitedTime)
-                        passengers.append(passenger)
-
-            if (car.status == "pick"):
-                desiredTime = (dt.combine(dt, car.arrivalTime) -
-                               timedelta(minutes=10)).time()
-
-                pickDemand = Demand.objects.filter(nodeFrom=car.link.nodeFrom, callTime__range=[
-                                                   desiredTime, car.arrivalTime], amount__range=[0, car.passengerChange]).order_by('-amount')
-
-                for demand in pickDemand:
-                    # check is there actually a car that drop this demand and get dropTime
-                    dropCar = Car.objects.filter(link__nodeFrom=demand.nodeTo, arrivalTime__range=[
-                                                 car.arrivalTime, datetime(2024, 1, 1, 21, 30, 00).time()])
-                    if dropCar:
-                        pickCount += demand.amount
-                        if pickCount > car.passengerChange:
-                            break
-
-                        waitedTime = (dt.combine(dt, car.arrivalTime) -
-                                      dt.combine(dt, demand.callTime)).total_seconds()
-                        passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
-                                              amount=demand.amount, callTime=demand.callTime, pickTime=car.arrivalTime, dropTime=dropCar[0].arrivalTime, waitedTime=waitedTime)
-                        passengers.append(passenger)
-
-            elif (car.status == "drop"):
-                copyPass = passengers.copy()
-                for each in copyPass:
-                    dropCount -= each.amount
-                    isCarDrop = (
-                        car.link.nodeFrom == each.nodeTo)
-                    if (isCarDrop):
-                        passengers.remove(each)
-                if dropCount != car.passengerChange:
-                    # Case: Pick and drop at the same node
-                    desiredTime = (dt.combine(dt, car.departureTime) -
-                                   timedelta(minutes=10)).time()
-                    pickDemand = Demand.objects.filter(nodeFrom=car.link.nodeFrom, callTime__range=[
-                        desiredTime, car.departureTime], amount__range=[0, (car.passengerChange - dropCount)])
-                    for demand in pickDemand:
-                        pickCount += demand.amount
-                        if pickCount > (car.passengerChange - dropCount):
-                            break
-                        waitedTime = (dt.combine(dt, car.departureTime) -
-                                      dt.combine(dt, demand.callTime)).total_seconds()
-                        passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
-                                              amount=demand.amount, callTime=demand.callTime, pickTime=car.departureTime, waitedTime=waitedTime)
-                        passengers.append(passenger)
-            Passenger.objects.bulk_create(passengers)
-
-        carsData = CarSerializer(carsAll, many=True)
-        return Response({'message': 'Success', 'car': carsData.data}, status=status.HTTP_201_CREATED)
+        None
 
 
 @api_view(['GET', 'POST'])
 def route_detail(request):
     if request.method == 'GET':
-        return Response()
+        route = Route.objects.all()
+        route_serializer = RouteSerializer(route, many=True)
+        return Response({'message': 'Success', "data": route_serializer.data}, status=status.HTTP_201_CREATED)
 
     elif request.method == 'POST':
         return Response()
@@ -305,21 +262,17 @@ def link_detail(request):
 
     elif request.method == 'POST':
         Link.objects.all().delete()
+        links = []
         for link in linkData:
-            linkCoor = Link(nodeFrom=link["nodeFrom"], nodeTo=link["nodeTo"])
-            linkCoor.save()
-            for coor in link['coordinates']:
-                coordinate = Coordinates(lat=coor[1], lng=coor[0])
-                coordinate.link = linkCoor
-                coordinate.save()
-        for link in linkData:
-            linkCoor = Link(nodeFrom=link["nodeTo"], nodeTo=link["nodeFrom"])
-            linkCoor.save()
-            coorReverse = link['coordinates'][::-1]
-            for coor in coorReverse:
-                coordinate = Coordinates(lat=coor[1], lng=coor[0])
-                coordinate.link = linkCoor
-                coordinate.save()
+            coor = [[each[1], each[0]]
+                    for each in link["geometry"]['coordinates']]
+            linkCoor = Link(nodeFrom=link["properties"]["FROMNODENO"], nodeTo=link["properties"]["TONODENO"], geom={
+                            'type': 'LineString', "coordinates": coor})
+            links.append(linkCoor)
+            linkCoorReverse = Link(nodeFrom=link["properties"]["TONODENO"], nodeTo=link["properties"]["FROMNODENO"], geom={
+                'type': 'LineString', "coordinates": coor[::-1]})
+            links.append(linkCoorReverse)
+        Link.objects.bulk_create(links)
         link = Link.objects.all()
         link_serializer = LinkSerializer(link, many=True)
         return Response({'message': 'Success', 'data': link_serializer.data}, status=status.HTTP_201_CREATED)
@@ -410,3 +363,22 @@ def dashboard(request):
         # dashboard = DashboardData.objects.all()
         dashboard_serializer = DashboardSerializer(dashboardData)
         return Response({'message': 'Success', 'data': dashboard_serializer.data}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'POST'])
+def passenger_check(request):
+    if request.method == 'GET':
+        cars = Passenger.objects.all()
+        allDemand = Demand.objects.all().values()
+        unserveCount = 0
+        list = []
+        for demand in allDemand:
+            passengers = Passenger.objects.filter(
+                callTime=demand["callTime"], nodeFrom=demand["nodeFrom"], nodeTo=demand['nodeTo'], amount=demand['amount'])
+            if not passengers:
+                print(demand, passengers)
+                unserveCount += 1
+        car_serializer = PassengerSerializer(cars, many=True)
+        return Response({'count': unserveCount, 'data': car_serializer.data}, status=status.HTTP_201_CREATED)
+    elif request.method == 'POST':
+        return

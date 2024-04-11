@@ -1,11 +1,12 @@
 from datetime import datetime
 from django.db import models
+from djgeojson.fields import PointField, MultiPointField, LineStringField
 
 
 class Link(models.Model):
     nodeFrom = models.CharField(max_length=20, default="0")
     nodeTo = models.CharField(max_length=20, default="0")
-
+    geom = LineStringField()
 
 class Coordinates(models.Model):
     link = models.ForeignKey(
@@ -13,17 +14,29 @@ class Coordinates(models.Model):
     lat = models.DecimalField(default=0, max_digits=20, decimal_places=14)
     lng = models.DecimalField(default=0, max_digits=20, decimal_places=14)
 
-
 class Car(models.Model):
+    type = models.CharField(max_length=20, default="Feature")
+    geometry = LineStringField()
+
+class CarProperties(models.Model):
+    car =  models.OneToOneField(
+        Car, related_name="properties", on_delete=models.CASCADE)
+    carId = models.CharField(max_length=20, default="1")
+    nodeFrom = models.CharField(max_length=20, default="0")
+    nodeTo = models.CharField(max_length=20, default="0")
+    time = models.DateTimeField(default=datetime.now, blank=True)
     arrivalTime = models.TimeField(default=datetime.now, blank=True)
     departureTime = models.TimeField(default=datetime.now, blank=True)
-    carId = models.CharField(max_length=20, default="1")
+    lastChargeTime = models.DateTimeField(default=datetime.now, blank=True)
     status = models.CharField(max_length=200, default="0")
     battery = models.IntegerField(default=100)
     passengerChange = models.IntegerField(default=0)
-    link = models.ForeignKey(Link, on_delete=models.CASCADE,blank=True, null=True)
+    passedLink = LineStringField()
+
 
 class Passenger(models.Model):
+    car = models.ForeignKey(
+        CarProperties, related_name='passengers', on_delete=models.CASCADE, default=1)
     callTime = models.TimeField(default=datetime.now, blank=True)
     pickTime = models.TimeField(default=datetime.now, blank=True)
     dropTime = models.TimeField(default=datetime.now, blank=True)
@@ -31,8 +44,6 @@ class Passenger(models.Model):
     nodeFrom = models.CharField(max_length=20, default="0")
     waitedTime = models.IntegerField(default=0)
     amount = models.IntegerField(default=0)
-    car = models.ForeignKey(
-        Car, related_name='passengers', on_delete=models.CASCADE, default=1)
 
 class Demand(models.Model):
     callTime = models.TimeField(default=datetime.now, blank=True)
@@ -41,9 +52,14 @@ class Demand(models.Model):
     amount = models.IntegerField(default=0)
 
 class Route(models.Model):
-    timeStamp = models.TimeField(default=datetime.now, blank=True)
+    type = models.CharField(max_length=20, default="Feature")
+    geometry = LineStringField()
+    
+class RouteProperties(models.Model):
+    route = models.OneToOneField(
+        Route, related_name="properties", on_delete=models.CASCADE)
+    time = models.TimeField(default=datetime.now, blank=True)
     nodeNo = models.CharField(max_length=20, default="0")
-    density = models.IntegerField(default=0)
 
 class DashboardData(models.Model):
     totalArrivalTime = models.TimeField(default=datetime.now, blank=True)
