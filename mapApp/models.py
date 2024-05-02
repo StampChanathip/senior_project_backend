@@ -63,9 +63,11 @@ class RouteProperties(models.Model):
 
 class DashboardData(models.Model):
     carId = models.CharField(max_length=20, default="1")
-    maxWaitedTime = models.TimeField(default=datetime.now, blank=True)
-    totalEmptyTripLength = models.IntegerField(default=0) #in meter
-    totalServiceLength = models.IntegerField(default=0) #in meter
+    maxWaitedTime = models.IntegerField(default=0)
+    totalEmptyTripLength = models.FloatField(default=0) #in meter
+    totalServiceLength = models.FloatField(default=0) #in meter
+    totalPostTravelTime = models.TimeField(default=datetime.now, blank=True)
+    totalStopTime = models.TimeField(default=datetime.now, blank=True)
 
 class ChargeLap(models.Model):
     car = models.ForeignKey(

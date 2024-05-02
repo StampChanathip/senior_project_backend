@@ -6,7 +6,7 @@ from rest_framework.viewsets import ViewSet
 import pandas as pd
 import json
 from datetime import datetime, timedelta
-from django.db.models import Count
+from django.db.models import Max
 from copy import deepcopy
 import xlrd
 import pytz
@@ -100,6 +100,7 @@ def handle_passenger():
                     passengers.append(passenger)
         Passenger.objects.bulk_create(passengers)
 
+
 @api_view(['GET', 'POST'])
 def car_detail(request):
 
@@ -130,13 +131,13 @@ def car_detail(request):
                 positions = []
                 distance = 0
                 lastChargeTime = (dt + timedelta(hours=6, minutes=30))
-            
+
             isProfilePoint = row["Is profile point"] == '1'
             nodeFrom = row["Node number"]
             nodeTo = nextRow["Node number"]
 
             if isProfilePoint:
-               
+
                 if int(idx) - 1 > 0:
                     passengerChange = int(df.loc[int(
                         idx) - 1, 'Post occupancy']) - int(df.loc[int(idx) - 2, 'Post occupancy'])
@@ -145,13 +146,13 @@ def car_detail(request):
 
                 carId = row["Number"]
                 vehstatus = row['veh status']
-                
+
                 if len(carProps) > 0:
                     if not (carProps[-1].carId != carId):
                         lastChargeTime = carProps[-1].lastChargeTime
                     else:
                         lastChargeTime = (datetime(
-                        2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30))
+                            2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30))
                 if not pd.isna(row['Relative arrival time']):
                     time = dt.combine(dt, (datetime.strptime(
                         row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
@@ -170,7 +171,7 @@ def car_detail(request):
                         float(row['SERVICELENGTH'])
                 else:
                     distance += float(row['SERVICELENGTH'])
-                    
+
                 battery = 100 - ((distance / 120)*100)
 
                 if not pd.isna(row['Time spent at charging area']):
@@ -194,7 +195,7 @@ def car_detail(request):
                     carProp.save()
                     carProps.append(carProp)
                     positions = []
-                    
+
             else:
                 if not isNewCar:
                     link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
@@ -281,27 +282,84 @@ def link_detail(request):
 @api_view(['GET', 'POST'])
 def dashboard(request):
     if request.method == 'GET':
-        return Response()
+        dashboard = DashboardData.objects.all()
+        dashboard_serializer = DashboardSerializer(dashboard, many=True)
+        return Response({'message': 'Success', 'data': dashboard_serializer.data}, status=status.HTTP_201_CREATED)
 
     elif request.method == 'POST':
+        DashboardData.objects.all().delete()
         dt = datetime.now()
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
 
-        maxWaitedTime = timedelta()
+        maxWaitedTime = 0
         totalEmptyTripLength = 0
         totalServiceLength = 0
+        totalPostTravelTime = timedelta()
+        totalStopTime = timedelta()
+        carId = "1"
 
         for idx, nextRow in row_iterator:
-            
+            isNewCar = (int(nextRow["Number"]) - int(row["Number"]) == 1)
+            if isNewCar or idx == len(df) - 1:
+                cars = CarProperties.objects.filter(carId=carId).aggregate(Max('passengerChange'))
+                print(carId)
+                print(cars)
+                dashboardData = DashboardData(
+                    carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
+                    totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength
+                )
+                dashboardData.save()
+
+                maxWaitedTime = 0
+                totalEmptyTripLength = 0
+                totalServiceLength = 0
+                totalPostTravelTime = timedelta()
+                totalStopTime = timedelta()
+                carId = nextRow["Number"]
+
+            if idx == len(df) - 1:
+                break
+            isProfilePoint = row["Is profile point"] == '1'
+            if isProfilePoint:
+                post_travel_time_str = row["Post travel time"]
+                if not pd.isna(row["Post travel time"]):
+                    # print(post_travel_time_str)
+                    post_travel_time_split = post_travel_time_str.split()
+                    minutes = 0
+                    seconds = 0
+                    for part in post_travel_time_split:
+                        if 'min' in part:
+                            minutes = int(part.replace('min', ''))
+                        elif 's' in part:
+                            seconds = int(part.replace('s', ''))
+                    totalPostTravelTime += timedelta(minutes=minutes,
+                                                     seconds=seconds)
+
+                stop_time_str = row["Stop time"]
+                if not pd.isna(row["Stop time"]):
+                    stop_time_split = stop_time_str.split()
+                    minutes = 0
+                    seconds = 0
+                    for part in stop_time_split:
+                        if 'min' in part:
+                            minutes = int(part.replace('min', ''))
+                        elif 's' in part:
+                            seconds = int(part.replace('s', ''))
+                    totalStopTime += timedelta(minutes=minutes,
+                                               seconds=seconds)
+
+            if not pd.isna(row["EMPTYTRIPLENGTH"]):
+                totalEmptyTripLength += float(row["EMPTYTRIPLENGTH"])
+            if not pd.isna(row["EMPTYTRIPLENGTH"]):
+                totalServiceLength += float(row["SERVICELENGTH"])
 
             row = nextRow
-        dashboardData = DashboardData()
-        dashboardData.save()
-        # dashboard = DashboardData.objects.all()
-        dashboard_serializer = DashboardSerializer(dashboardData)
+
+        dashboard = DashboardData.objects.all()
+        dashboard_serializer = DashboardSerializer(dashboard, many=True)
         return Response({'message': 'Success', 'data': dashboard_serializer.data}, status=status.HTTP_201_CREATED)
 
 

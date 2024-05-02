@@ -21,13 +21,14 @@ class LinkSerializer(serializers.ModelSerializer):
         model = Link
         fields = ['nodeFrom', 'nodeTo', 'geom']
 
+
 class CarPropertiesSerializer(serializers.ModelSerializer):
     passengers = PassengerSerializer(many=True, read_only=True)
 
     class Meta:
         model = CarProperties
         fields = ['carId', 'nodeFrom', 'status', 'battery', 'time',
-                 'arrivalTime', 'departureTime', 'lastChargeTime', 'passengerChange','passengers', 'passedLink']
+                  'arrivalTime', 'departureTime', 'lastChargeTime', 'passengerChange', 'passengers', 'passedLink']
 
 
 class CarSerializer(serializers.ModelSerializer):
@@ -37,10 +38,12 @@ class CarSerializer(serializers.ModelSerializer):
         model = Car
         fields = ["type", "properties", 'geometry']
 
+
 class RoutePropertiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = RouteProperties
         fields = ['time', 'nodeNo']
+
 
 class RouteSerializer(serializers.ModelSerializer):
     properties = RoutePropertiesSerializer(read_only=True)
@@ -55,13 +58,16 @@ class DemandSerializer(serializers.ModelSerializer):
         model = Demand
         fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
 
+
 class ChargeLapSerializer(serializers.ModelSerializer):
     class Meta:
         models = ChargeLap
         field = "__all__"
 
+
 class DashboardSerializer(serializers.ModelSerializer):
     chargeLap = ChargeLapSerializer(many=True, read_only=True)
+
     class Meta:
         model = DashboardData
-        fields = "__all__"
+        fields = ['carId', 'totalPostTravelTime', 'totalStopTime', 'totalEmptyTripLength', 'totalServiceLength', 'chargeLap']
