@@ -69,9 +69,15 @@ class DashboardData(models.Model):
     totalPostTravelTime = models.TimeField(default=datetime.now, blank=True)
     totalStopTime = models.TimeField(default=datetime.now, blank=True)
 
+class PassengerCount(models.Model):
+    carId = models.ForeignKey(
+        DashboardData, related_name='passengerData', on_delete=models.CASCADE, default=1)
+    time = models.TimeField(default=datetime.now, blank=True)
+    passengerCount = models.IntegerField(default=0)
+    
 class ChargeLap(models.Model):
     car = models.ForeignKey(
-        CarProperties, related_name='chargeLap', on_delete=models.CASCADE, default=1)
+        DashboardData, related_name='chargeLap', on_delete=models.CASCADE, default=1)
     lap = models.CharField(max_length=20, default="1")
     timeArrival = models.TimeField(default=datetime.now, blank=True)
     timeCharged = models.TimeField(default=datetime.now, blank=True)

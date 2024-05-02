@@ -6,7 +6,7 @@ from rest_framework.viewsets import ViewSet
 import pandas as pd
 import json
 from datetime import datetime, timedelta
-from django.db.models import Max
+from django.db.models import Max, Count
 from copy import deepcopy
 import xlrd
 import pytz
@@ -99,6 +99,77 @@ def handle_passenger():
                                           amount=demand.amount, callTime=demand.callTime, pickTime=car.departureTime, waitedTime=waitedTime)
                     passengers.append(passenger)
         Passenger.objects.bulk_create(passengers)
+
+
+def handle_dashboard(data):
+    DashboardData.objects.all().delete()
+    dt = datetime.now()
+    df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
+    row_iterator = df.iterrows()
+    _, row = next(row_iterator)
+
+    maxWaitedTime = 0
+    totalEmptyTripLength = 0
+    totalServiceLength = 0
+    totalPostTravelTime = timedelta()
+    totalStopTime = timedelta()
+    carId = "1"
+
+    for idx, nextRow in row_iterator:
+        isNewCar = (int(nextRow["Number"]) - int(row["Number"]) == 1)
+        if isNewCar or idx == len(df) - 1:
+            maxWaitedTime = Passenger.objects.filter(
+                car__carId=carId).aggregate(Max("waitedTime"))['waitedTime__max']
+            dashboardData = DashboardData(
+                carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
+                totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength, maxWaitedTime=maxWaitedTime
+            )
+            dashboardData.save()
+
+            maxWaitedTime = 0
+            totalEmptyTripLength = 0
+            totalServiceLength = 0
+            totalPostTravelTime = timedelta()
+            totalStopTime = timedelta()
+            carId = nextRow["Number"]
+
+        if idx == len(df) - 1:
+            break
+        isProfilePoint = row["Is profile point"] == '1'
+        if isProfilePoint:
+            post_travel_time_str = row["Post travel time"]
+            if not pd.isna(row["Post travel time"]):
+                # print(post_travel_time_str)
+                post_travel_time_split = post_travel_time_str.split()
+                minutes = 0
+                seconds = 0
+                for part in post_travel_time_split:
+                    if 'min' in part:
+                        minutes = int(part.replace('min', ''))
+                    elif 's' in part:
+                        seconds = int(part.replace('s', ''))
+                totalPostTravelTime += timedelta(minutes=minutes,
+                                                 seconds=seconds)
+
+            stop_time_str = row["Stop time"]
+            if not pd.isna(row["Stop time"]):
+                stop_time_split = stop_time_str.split()
+                minutes = 0
+                seconds = 0
+                for part in stop_time_split:
+                    if 'min' in part:
+                        minutes = int(part.replace('min', ''))
+                    elif 's' in part:
+                        seconds = int(part.replace('s', ''))
+                totalStopTime += timedelta(minutes=minutes,
+                                           seconds=seconds)
+
+        if not pd.isna(row["EMPTYTRIPLENGTH"]):
+            totalEmptyTripLength += float(row["EMPTYTRIPLENGTH"])
+        if not pd.isna(row["EMPTYTRIPLENGTH"]):
+            totalServiceLength += float(row["SERVICELENGTH"])
+
+        row = nextRow
 
 
 @api_view(['GET', 'POST'])
@@ -304,14 +375,20 @@ def dashboard(request):
         for idx, nextRow in row_iterator:
             isNewCar = (int(nextRow["Number"]) - int(row["Number"]) == 1)
             if isNewCar or idx == len(df) - 1:
-                cars = CarProperties.objects.filter(carId=carId).aggregate(Max('passengerChange'))
-                print(carId)
-                print(cars)
+                maxWaitedTime = Passenger.objects.filter(
+                    car__carId=carId).aggregate(Max("waitedTime"))['waitedTime__max']
+                
                 dashboardData = DashboardData(
                     carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
-                    totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength
+                    totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength, maxWaitedTime=maxWaitedTime
                 )
                 dashboardData.save()
+                
+                carData = CarProperties.objects.filter(carId=carId).values()
+                
+                for each in carData:
+                    passenger = PassengerCount(carId=dashboardData,time=each['arrivalTime'], passengerCount=len(Passenger.objects.filter(car=each['id'])))
+                    passenger.save()
 
                 maxWaitedTime = 0
                 totalEmptyTripLength = 0
@@ -326,7 +403,6 @@ def dashboard(request):
             if isProfilePoint:
                 post_travel_time_str = row["Post travel time"]
                 if not pd.isna(row["Post travel time"]):
-                    # print(post_travel_time_str)
                     post_travel_time_split = post_travel_time_str.split()
                     minutes = 0
                     seconds = 0

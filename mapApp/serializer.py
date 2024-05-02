@@ -61,13 +61,21 @@ class DemandSerializer(serializers.ModelSerializer):
 
 class ChargeLapSerializer(serializers.ModelSerializer):
     class Meta:
-        models = ChargeLap
-        field = "__all__"
+        model = ChargeLap
+        fields = "__all__"
+
+
+class PassengerCountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PassengerCount
+        fields = ["time", "passengerCount"]
 
 
 class DashboardSerializer(serializers.ModelSerializer):
     chargeLap = ChargeLapSerializer(many=True, read_only=True)
+    passengerData = PassengerCountSerializer(many=True, read_only=True)
 
     class Meta:
         model = DashboardData
-        fields = ['carId', 'totalPostTravelTime', 'totalStopTime', 'totalEmptyTripLength', 'totalServiceLength', 'chargeLap']
+        fields = ['carId', 'totalPostTravelTime', 'totalStopTime',
+                  'totalEmptyTripLength', 'totalServiceLength', "maxWaitedTime", 'chargeLap', 'passengerData']
