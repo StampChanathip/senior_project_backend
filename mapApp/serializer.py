@@ -16,32 +16,48 @@ class PositionsSerializer(serializers.ModelSerializer):
 
 
 class LinkSerializer(serializers.ModelSerializer):
-    coordinates = PositionsSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Link
-        fields = ['nodeFrom', 'nodeTo', 'coordinates']
-        
-class CarSerializer(serializers.ModelSerializer):
+        fields = ['nodeFrom', 'nodeTo', 'geom']
+
+class CarPropertiesSerializer(serializers.ModelSerializer):
     passengers = PassengerSerializer(many=True, read_only=True)
     link = LinkSerializer()
 
     class Meta:
+        model = CarProperties
+        fields = ['carId', 'nodeFrom', 'status', 'battery', 'time',
+                 'arrivalTime', 'departureTime', 'lastChargeTime', 'passengerChange','passengers', 'passedLink']
+
+
+class CarSerializer(serializers.ModelSerializer):
+    properties = CarPropertiesSerializer(read_only=True)
+
+    class Meta:
         model = Car
-        fields = ['carId','status', 'battery', 'arrivalTime', "departureTime", 'passengerChange', 'link', 'passengers']
+        fields = ["type", "properties", 'geometry']
+
+class RoutePropertiesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RouteProperties
+        fields = ['time', 'nodeNo']
 
 class RouteSerializer(serializers.ModelSerializer):
+    properties = RoutePropertiesSerializer(read_only=True)
 
     class Meta:
         model = Route
-        fields = ['nodeNo', 'coordinates', 'density', 'timeStamp']
+        fields = ["type", "properties", 'geometry']
 
 class DemandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Demand
         fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
 
+
 class DashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = DashboardData
-        fields = ['totalArrivalTime', 'totalDepartureTime', 'totalChargingTime', 'totalStopTime', 'totalPostTravel']
+        fields = ['totalArrivalTime', 'totalDepartureTime',
+                  'totalChargingTime', 'totalStopTime', 'totalPostTravel']
