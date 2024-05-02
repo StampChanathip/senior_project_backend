@@ -290,75 +290,15 @@ def dashboard(request):
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
 
-        arrival_time = timedelta()
-        departure_time = timedelta()
-        stop_time = timedelta()
-        post_travel_time = timedelta()
-        charging_time = timedelta()
+        maxWaitedTime = timedelta()
+        totalEmptyTripLength = 0
+        totalServiceLength = 0
 
         for idx, nextRow in row_iterator:
-            if not pd.isna(row['Relative arrival time']):
-                if arrival_time:
-                    arrivalTime = (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-                    # relative_arrival_time = (datetime.strptime(
-                    #     row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-                    # arrival_time = (dt.combine(dt, arrival_time) + dt.combine(dt, relative_arrival_time)).time()
-
-            # if not pd.isna(row['Relative departure time']):
-            #     if departure_time:
-            #         relative_departure_time = (datetime.strptime(
-            #             row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-            #         departure_time = (dt.combine(dt, departure_time) + dt.combine(dt, relative_departure_time)).time()
-
-            # if not pd.isna(row['Stop time']):
-            #     stop_time_delta = timedelta()
-            #     stop_time_str = row['Stop time']
-            #     stop_time_split = stop_time_str.split()
-            #     minutes = 0
-            #     seconds = 0
-            #     for part in stop_time_split:
-            #         if 'min' in part:
-            #             minutes = int(part.replace('min', ''))
-            #         elif 's' in part:
-            #             seconds = int(part.replace('s', ''))
-            #     stop_time_delta = timedelta(minutes=minutes, seconds=seconds)
-            #     if stop_time:
-            #         stop_time += stop_time_delta
-
-            # if not pd.isna(row['Post travel time']):
-            #     post_travel_time_delta = timedelta()
-            #     post_travel_time_str = row['Post travel time']
-            #     post_travel_time_split = post_travel_time_str.split()
-            #     minutes = 0
-            #     seconds = 0
-            #     for part in post_travel_time_split:
-            #         if 'min' in part:
-            #             minutes = int(part.replace('min', ''))
-            #         elif 's' in part:
-            #             seconds = int(part.replace('s', ''))
-            #     post_travel_time_delta = timedelta(minutes=minutes, seconds=seconds)
-            #     if post_travel_time:
-            #         post_travel_time += post_travel_time_delta
-
-            # if not pd.isna(row['Time spent at charging area']):
-            #     charging_time_delta = timedelta()
-            #     charging_time_str = row['Time spent at charging area']
-            #     charging_time_split = charging_time_str.split()
-            #     minutes = 0
-            #     seconds = 0
-            #     for part in charging_time_split:
-            #         if 'min' in part:
-            #             minutes = int(part.replace('min', ''))
-            #         elif 's' in part:
-            #             seconds = int(part.replace('s', ''))
-            #     charging_time_delta = timedelta(minutes=minutes, seconds=seconds)
-            #     if charging_time:
-            #         charging_time += charging_time_delta
+            
 
             row = nextRow
-        dashboardData = DashboardData(totalArrivalTime=arrival_time, totalDepartureTime=departure_time, totalChargingTime=charging_time,
-                                      totalPostTravelTime=post_travel_time, totalStopTime=stop_time)
+        dashboardData = DashboardData()
         dashboardData.save()
         # dashboard = DashboardData.objects.all()
         dashboard_serializer = DashboardSerializer(dashboardData)

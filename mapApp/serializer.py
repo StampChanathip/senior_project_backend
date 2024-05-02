@@ -55,9 +55,13 @@ class DemandSerializer(serializers.ModelSerializer):
         model = Demand
         fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
 
+class ChargeLapSerializer(serializers.ModelSerializer):
+    class Meta:
+        models = ChargeLap
+        field = "__all__"
 
 class DashboardSerializer(serializers.ModelSerializer):
+    chargeLap = ChargeLapSerializer(many=True, read_only=True)
     class Meta:
         model = DashboardData
-        fields = ['totalArrivalTime', 'totalDepartureTime',
-                  'totalChargingTime', 'totalStopTime', 'totalPostTravel']
+        fields = "__all__"
