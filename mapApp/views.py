@@ -191,6 +191,7 @@ def car_detail(request):
         routeProps = []
         distance = 0
         positions = []
+        stopTime = dt.time()
 
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
@@ -245,6 +246,15 @@ def car_detail(request):
 
                 battery = 100 - ((distance / 120)*100)
 
+                if not pd.isna(row['Stop time']):
+                    total_seconds = 0
+                    for part in row['Stop time'].split():
+                        if 'min' in part:
+                            total_seconds += int(part.replace('min', '')) * 60
+                        elif 's' in part:
+                            total_seconds += int(part.replace('s', ''))
+                    stopTime = (dt + timedelta(seconds=total_seconds)).time()
+
                 if not pd.isna(row['Time spent at charging area']):
                     vehstatus = 'charging'
                     lastChargeTime = dt.combine(dt, (datetime.strptime(
@@ -262,11 +272,11 @@ def car_detail(request):
                     car.save()
 
                     carProp = CarProperties(car=car, carId=carId, nodeFrom=nodeFrom, nodeTo=nodeTo, status=vehstatus, battery=battery, time=time,
-                                            arrivalTime=arrivalTime, departureTime=departureTime, lastChargeTime=lastChargeTime, passengerChange=passengerChange, passedLink=positions)
+                                            arrivalTime=arrivalTime, departureTime=departureTime, stopTime=stopTime, lastChargeTime=lastChargeTime,
+                                            passengerChange=passengerChange, travelDistance=distance, passedLink=positions)
                     carProp.save()
                     carProps.append(carProp)
                     positions = []
-
             else:
                 if not isNewCar:
                     link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
@@ -377,19 +387,29 @@ def dashboard(request):
             if isNewCar or idx == len(df) - 1:
                 maxWaitedTime = Passenger.objects.filter(
                     car__carId=carId).aggregate(Max("waitedTime"))['waitedTime__max']
-                
+
                 dashboardData = DashboardData(
                     carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
                     totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength, maxWaitedTime=maxWaitedTime
                 )
                 dashboardData.save()
-                
+
                 carData = CarProperties.objects.filter(carId=carId).values()
-                
+                carChargeData = CarProperties.objects.filter(
+                    carId=carId, status="charging").values()
+                lap = 1
+                for each in carChargeData:
+                    chargeLap = ChargeLap(car=dashboardData, lap=str(
+                        lap), timeArrival=each['arrivalTime'], timeCharged=each['stopTime'])
+                    chargeLap.save()
+                    lap += 1
+
                 for each in carData:
-                    passenger = PassengerCount(carId=dashboardData,time=each['arrivalTime'], passengerCount=len(Passenger.objects.filter(car=each['id'])))
+                    count = Passenger.objects.filter(car__id=each['id']).aggregate(Count('amount'))['amount__count']
+                    passenger = PassengerCount(carId=dashboardData, time=each['arrivalTime'], passengerCount=count)
                     passenger.save()
 
+                # clear state
                 maxWaitedTime = 0
                 totalEmptyTripLength = 0
                 totalServiceLength = 0

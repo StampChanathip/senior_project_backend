@@ -31,6 +31,8 @@ class CarProperties(models.Model):
     status = models.CharField(max_length=200, default="0")
     battery = models.IntegerField(default=100)
     passengerChange = models.IntegerField(default=0)
+    travelDistance=models.FloatField(default=0) #in meter
+    stopTime=models.TimeField(default=datetime.now, blank=True)
     passedLink = LineStringField()
 
 

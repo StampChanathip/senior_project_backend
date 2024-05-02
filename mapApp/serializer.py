@@ -28,7 +28,7 @@ class CarPropertiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarProperties
         fields = ['carId', 'nodeFrom', 'status', 'battery', 'time',
-                  'arrivalTime', 'departureTime', 'lastChargeTime', 'passengerChange', 'passengers', 'passedLink']
+                  'arrivalTime', 'departureTime', 'lastChargeTime','stopTime', 'passengerChange', 'travelDistance', 'passengers', 'passedLink']
 
 
 class CarSerializer(serializers.ModelSerializer):
@@ -62,7 +62,7 @@ class DemandSerializer(serializers.ModelSerializer):
 class ChargeLapSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChargeLap
-        fields = "__all__"
+        fields = ['lap', 'timeArrival', 'timeCharged']
 
 
 class PassengerCountSerializer(serializers.ModelSerializer):
