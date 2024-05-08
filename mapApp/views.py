@@ -192,24 +192,27 @@ def car_detail(request):
         distance = 0
         positions = []
         stopTime = dt.time()
-
+        
+        startTime = StationTime.objects.filter(carId="1").values()[0]["stationTime"]
+        stationDepartTime = timedelta(hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
-        lastChargeTime = (dt + timedelta(hours=6, minutes=30))
+        lastChargeTime = (dt + stationDepartTime)
         for idx, nextRow in row_iterator:
             # handle car properties
             isNewCar = not (int(nextRow["Index"]) - int(row["Index"]) == 1)
             if isNewCar:
                 positions = []
                 distance = 0
-                lastChargeTime = (dt + timedelta(hours=6, minutes=30))
+                startTime = StationTime.objects.filter(carId=nextRow["Number"]).values()[0]["stationTime"]
+                stationDepartTime = timedelta(hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
+                lastChargeTime = (dt + stationDepartTime)
 
             isProfilePoint = row["Is profile point"] == '1'
             nodeFrom = row["Node number"]
             nodeTo = nextRow["Node number"]
 
             if isProfilePoint:
-
                 if int(idx) - 1 > 0:
                     passengerChange = int(df.loc[int(
                         idx) - 1, 'Post occupancy']) - int(df.loc[int(idx) - 2, 'Post occupancy'])
@@ -224,19 +227,19 @@ def car_detail(request):
                         lastChargeTime = carProps[-1].lastChargeTime
                     else:
                         lastChargeTime = (datetime(
-                            2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30))
+                            2024, 1, 1, 00, 00, 00) + stationDepartTime)
                 if not pd.isna(row['Relative arrival time']):
                     time = dt.combine(dt, (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
+                        row['Relative arrival time'], "%H:%M:%S") + stationDepartTime).time(), tzinfo=pytz.UTC)
                     arrivalTime = (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                        row['Relative arrival time'], "%H:%M:%S") + stationDepartTime).time()
                 else:
-                    time = (dt + timedelta(hours=6, minutes=30))
-                    arrivalTime = (dt + timedelta(hours=6, minutes=30)).time()
+                    time = (dt + stationDepartTime)
+                    arrivalTime = (dt + stationDepartTime).time()
 
                 if not pd.isna(row['Relative departure time']):
                     departureTime = (datetime.strptime(
-                        row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                        row['Relative departure time'], "%H:%M:%S") + stationDepartTime).time()
 
                 if not pd.isna(row['EMPTYTRIPLENGTH']):
                     distance += float(row['EMPTYTRIPLENGTH']) + \
@@ -258,7 +261,7 @@ def car_detail(request):
                 if not pd.isna(row['Time spent at charging area']):
                     vehstatus = 'charging'
                     lastChargeTime = dt.combine(dt, (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
+                        row['Relative arrival time'], "%H:%M:%S") + stationDepartTime).time(), tzinfo=pytz.UTC)
                     distance = 0
                     battery = 100
 
@@ -478,3 +481,21 @@ def passenger_check(request):
         return Response({'count': unserveCount, 'data': car_serializer.data}, status=status.HTTP_201_CREATED)
     elif request.method == 'POST':
         return
+
+@api_view(['GET', 'POST'])
+def station_time(request):
+    if request.method == 'GET':
+        return Response()
+    elif request.method == 'POST':
+        data = request.FILES['excel_file']
+        df = pd.read_excel(data, sheet_name=0, dtype=str)
+        dt = datetime(2024, 1, 1, 00, 00, 00)
+        row_iterator = df.iterrows()
+        for _, row in row_iterator:
+            departureTime = datetime.strptime(
+                        row['Departure time'], "%H:%M:%S").time()
+            stationTime = StationTime(carId=row["Number"], stationTime=departureTime)
+            stationTime.save()
+        stationTimes = StationTime.objects.all()
+        stationTimes_serializer = StationTimeSerializer(stationTimes, many=True)
+        return Response({'message': 'Success', "data": stationTimes_serializer.data}, status=status.HTTP_201_CREATED)

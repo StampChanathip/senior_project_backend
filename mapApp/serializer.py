@@ -79,3 +79,8 @@ class DashboardSerializer(serializers.ModelSerializer):
         model = DashboardData
         fields = ['carId', 'totalPostTravelTime', 'totalStopTime',
                   'totalEmptyTripLength', 'totalServiceLength', "maxWaitedTime", 'chargeLap', 'passengerData']
+
+class StationTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StationTime
+        fields = "__all__"

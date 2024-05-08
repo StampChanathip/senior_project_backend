@@ -83,3 +83,7 @@ class ChargeLap(models.Model):
     lap = models.CharField(max_length=20, default="1")
     timeArrival = models.TimeField(default=datetime.now, blank=True)
     timeCharged = models.TimeField(default=datetime.now, blank=True)
+    
+class StationTime(models.Model):
+    carId = models.CharField(max_length=20, default="1")
+    stationTime = models.TimeField(default=datetime.now, blank=True)
