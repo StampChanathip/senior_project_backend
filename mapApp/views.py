@@ -277,6 +277,8 @@ def car_detail(request):
                     carProp.save()
                     carProps.append(carProp)
                     positions = []
+                    for each in geom["coordinates"]:
+                        positions.append(each)
             else:
                 if not isNewCar:
                     link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
