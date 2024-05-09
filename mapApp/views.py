@@ -176,7 +176,7 @@ def handle_dashboard(data):
 def car_detail(request):
 
     if request.method == 'GET':
-        car = Car.objects.all()
+        car = Car.objects.all().order_by('properties__time')
         car_serializer = CarSerializer(car, many=True)
         return Response(car_serializer.data)
 
