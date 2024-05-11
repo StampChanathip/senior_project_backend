@@ -6,7 +6,7 @@ from rest_framework.viewsets import ViewSet
 import pandas as pd
 import json
 from datetime import datetime, timedelta
-from django.db.models import Count
+from django.db.models import Max, Count
 from copy import deepcopy
 import xlrd
 import pytz
@@ -100,17 +100,105 @@ def handle_passenger():
                     passengers.append(passenger)
         Passenger.objects.bulk_create(passengers)
 
+
+def handle_dashboard(data):
+    DashboardData.objects.all().delete()
+    dt = datetime(2024, 1, 1, 00, 00, 00)
+    df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
+    row_iterator = df.iterrows()
+    _, row = next(row_iterator)
+
+    maxWaitedTime = 0
+    totalEmptyTripLength = 0
+    totalServiceLength = 0
+    totalPostTravelTime = timedelta()
+    totalStopTime = timedelta()
+    carId = "1"
+
+    for idx, nextRow in row_iterator:
+        isNewCar = (int(nextRow["Number"]) - int(row["Number"]) == 1)
+        if isNewCar or idx == len(df) - 1:
+            maxWaitedTime = Passenger.objects.filter(
+                car__carId=carId).aggregate(Max("waitedTime"))['waitedTime__max']
+            dashboardData = DashboardData(
+                carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
+                totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength, maxWaitedTime=maxWaitedTime
+            )
+            dashboardData.save()
+
+            carData = CarProperties.objects.filter(carId=carId).values()
+            carChargeData = CarProperties.objects.filter(
+                carId=carId, status="charging").values()
+            lap = 1
+            for each in carChargeData:
+                chargeLap = ChargeLap(car=dashboardData, lap=str(
+                    lap), timeArrival=each['arrivalTime'], timeCharged=each['stopTime'])
+                chargeLap.save()
+                lap += 1
+
+            for each in carData:
+                count = Passenger.objects.filter(car__id=each['id']).aggregate(
+                    Count('amount'))['amount__count']
+                passenger = PassengerCount(
+                    carId=dashboardData, time=each['arrivalTime'], passengerCount=count)
+                passenger.save()
+
+            # clear state
+            maxWaitedTime = 0
+            totalEmptyTripLength = 0
+            totalServiceLength = 0
+            totalPostTravelTime = timedelta()
+            totalStopTime = timedelta()
+            carId = nextRow["Number"]
+
+        if idx == len(df) - 1:
+            break
+        isProfilePoint = row["Is profile point"] == '1'
+        if isProfilePoint:
+            post_travel_time_str = row["Post travel time"]
+            if not pd.isna(row["Post travel time"]):
+                post_travel_time_split = post_travel_time_str.split()
+                minutes = 0
+                seconds = 0
+                for part in post_travel_time_split:
+                    if 'min' in part:
+                        minutes = int(part.replace('min', ''))
+                    elif 's' in part:
+                        seconds = int(part.replace('s', ''))
+                totalPostTravelTime += timedelta(minutes=minutes,
+                                                 seconds=seconds)
+
+            stop_time_str = row["Stop time"]
+            if not pd.isna(row["Stop time"]):
+                stop_time_split = stop_time_str.split()
+                minutes = 0
+                seconds = 0
+                for part in stop_time_split:
+                    if 'min' in part:
+                        minutes = int(part.replace('min', ''))
+                    elif 's' in part:
+                        seconds = int(part.replace('s', ''))
+                totalStopTime += timedelta(minutes=minutes,
+                                           seconds=seconds)
+
+        if not pd.isna(row["EMPTYTRIPLENGTH"]):
+            totalEmptyTripLength += float(row["EMPTYTRIPLENGTH"])
+        if not pd.isna(row["EMPTYTRIPLENGTH"]):
+            totalServiceLength += float(row["SERVICELENGTH"])
+
+        row = nextRow
+
+
 @api_view(['GET', 'POST'])
 def car_detail(request):
 
     if request.method == 'GET':
-        car = Car.objects.all()
+        car = Car.objects.all().order_by('properties__time')
         car_serializer = CarSerializer(car, many=True)
         return Response(car_serializer.data)
 
     elif request.method == 'POST':
         Car.objects.all().delete()
-        # Passenger.objects.all().delete()
 
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
@@ -119,24 +207,32 @@ def car_detail(request):
         routeProps = []
         distance = 0
         positions = []
+        stopTime = dt.time()
 
+        startTime = StationTime.objects.filter(
+            carId="1").values()[0]["stationTime"]
+        stationDepartTime = timedelta(
+            hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
-        lastChargeTime = (dt + timedelta(hours=6, minutes=30))
+        lastChargeTime = (dt + stationDepartTime)
         for idx, nextRow in row_iterator:
             # handle car properties
             isNewCar = not (int(nextRow["Index"]) - int(row["Index"]) == 1)
             if isNewCar:
                 positions = []
                 distance = 0
-                lastChargeTime = (dt + timedelta(hours=6, minutes=30))
-            
+                startTime = StationTime.objects.filter(
+                    carId=nextRow["Number"]).values()[0]["stationTime"]
+                stationDepartTime = timedelta(
+                    hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
+                lastChargeTime = (dt + stationDepartTime)
+
             isProfilePoint = row["Is profile point"] == '1'
             nodeFrom = row["Node number"]
             nodeTo = nextRow["Node number"]
 
             if isProfilePoint:
-               
                 if int(idx) - 1 > 0:
                     passengerChange = int(df.loc[int(
                         idx) - 1, 'Post occupancy']) - int(df.loc[int(idx) - 2, 'Post occupancy'])
@@ -145,38 +241,47 @@ def car_detail(request):
 
                 carId = row["Number"]
                 vehstatus = row['veh status']
-                
+
                 if len(carProps) > 0:
                     if not (carProps[-1].carId != carId):
                         lastChargeTime = carProps[-1].lastChargeTime
                     else:
                         lastChargeTime = (datetime(
-                        2024, 1, 1, 00, 00, 00) + timedelta(hours=6, minutes=30))
+                            2024, 1, 1, 00, 00, 00) + stationDepartTime)
                 if not pd.isna(row['Relative arrival time']):
                     time = dt.combine(dt, (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
+                        row['Relative arrival time'], "%H:%M:%S") + stationDepartTime).time(), tzinfo=pytz.UTC)
                     arrivalTime = (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                        row['Relative arrival time'], "%H:%M:%S") + stationDepartTime).time()
                 else:
-                    time = (dt + timedelta(hours=6, minutes=30))
-                    arrivalTime = (dt + timedelta(hours=6, minutes=30)).time()
+                    time = (dt + stationDepartTime)
+                    arrivalTime = (dt + stationDepartTime).time()
 
                 if not pd.isna(row['Relative departure time']):
                     departureTime = (datetime.strptime(
-                        row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
+                        row['Relative departure time'], "%H:%M:%S") + stationDepartTime).time()
 
                 if not pd.isna(row['EMPTYTRIPLENGTH']):
                     distance += float(row['EMPTYTRIPLENGTH']) + \
                         float(row['SERVICELENGTH'])
                 else:
                     distance += float(row['SERVICELENGTH'])
-                    
+
                 battery = 100 - ((distance / 120)*100)
+
+                if not pd.isna(row['Stop time']):
+                    total_seconds = 0
+                    for part in row['Stop time'].split():
+                        if 'min' in part:
+                            total_seconds += int(part.replace('min', '')) * 60
+                        elif 's' in part:
+                            total_seconds += int(part.replace('s', ''))
+                    stopTime = (dt + timedelta(seconds=total_seconds)).time()
 
                 if not pd.isna(row['Time spent at charging area']):
                     vehstatus = 'charging'
                     lastChargeTime = dt.combine(dt, (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time(), tzinfo=pytz.UTC)
+                        row['Relative arrival time'], "%H:%M:%S") + stationDepartTime).time(), tzinfo=pytz.UTC)
                     distance = 0
                     battery = 100
 
@@ -190,11 +295,13 @@ def car_detail(request):
                     car.save()
 
                     carProp = CarProperties(car=car, carId=carId, nodeFrom=nodeFrom, nodeTo=nodeTo, status=vehstatus, battery=battery, time=time,
-                                            arrivalTime=arrivalTime, departureTime=departureTime, lastChargeTime=lastChargeTime, passengerChange=passengerChange, passedLink=positions)
+                                            arrivalTime=arrivalTime, departureTime=departureTime, stopTime=stopTime, lastChargeTime=lastChargeTime,
+                                            passengerChange=passengerChange, travelDistance=distance, passedLink=positions)
                     carProp.save()
                     carProps.append(carProp)
                     positions = []
-                    
+                    for each in geom["coordinates"]:
+                        positions.append(each)
             else:
                 if not isNewCar:
                     link = Link.objects.get(nodeFrom=nodeFrom, nodeTo=nodeTo)
@@ -206,6 +313,7 @@ def car_detail(request):
         # CarProperties.objects.bulk_create(carProps)
         RouteProperties.objects.bulk_create(routeProps)
         handle_passenger()
+        handle_dashboard(data)
 
         car1 = Car.objects.all().order_by('properties__time')
         car_serializer = CarSerializer(car1, many=True)
@@ -281,87 +389,101 @@ def link_detail(request):
 @api_view(['GET', 'POST'])
 def dashboard(request):
     if request.method == 'GET':
-        return Response()
+        dashboard = DashboardData.objects.all()
+        dashboard_serializer = DashboardSerializer(dashboard, many=True)
+        return Response({'message': 'Success', 'data': dashboard_serializer.data}, status=status.HTTP_201_CREATED)
 
     elif request.method == 'POST':
-        dt = datetime.now()
+        DashboardData.objects.all().delete()
+        dt = datetime(2024, 1, 1, 00, 00, 00)
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
 
-        arrival_time = timedelta()
-        departure_time = timedelta()
-        stop_time = timedelta()
-        post_travel_time = timedelta()
-        charging_time = timedelta()
+        maxWaitedTime = 0
+        totalEmptyTripLength = 0
+        totalServiceLength = 0
+        totalPostTravelTime = timedelta()
+        totalStopTime = timedelta()
+        carId = "1"
 
         for idx, nextRow in row_iterator:
-            if not pd.isna(row['Relative arrival time']):
-                if arrival_time:
-                    arrivalTime = (datetime.strptime(
-                        row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-                    # relative_arrival_time = (datetime.strptime(
-                    #     row['Relative arrival time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-                    # arrival_time = (dt.combine(dt, arrival_time) + dt.combine(dt, relative_arrival_time)).time()
+            isNewCar = (int(nextRow["Number"]) - int(row["Number"]) == 1)
+            if isNewCar or idx == len(df) - 1:
+                maxWaitedTime = Passenger.objects.filter(
+                    car__carId=carId).aggregate(Max("waitedTime"))['waitedTime__max']
+                print(totalPostTravelTime)
+                dashboardData = DashboardData(
+                    carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
+                    totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength, maxWaitedTime=maxWaitedTime
+                )
+                dashboardData.save()
 
-            # if not pd.isna(row['Relative departure time']):
-            #     if departure_time:
-            #         relative_departure_time = (datetime.strptime(
-            #             row['Relative departure time'], "%H:%M:%S") + timedelta(hours=6, minutes=30)).time()
-            #         departure_time = (dt.combine(dt, departure_time) + dt.combine(dt, relative_departure_time)).time()
+                carData = CarProperties.objects.filter(carId=carId).values()
+                carChargeData = CarProperties.objects.filter(
+                    carId=carId, status="charging").values()
+                lap = 1
+                for each in carChargeData:
+                    chargeLap = ChargeLap(car=dashboardData, lap=str(
+                        lap), timeArrival=each['arrivalTime'], timeCharged=each['stopTime'])
+                    chargeLap.save()
+                    lap += 1
 
-            # if not pd.isna(row['Stop time']):
-            #     stop_time_delta = timedelta()
-            #     stop_time_str = row['Stop time']
-            #     stop_time_split = stop_time_str.split()
-            #     minutes = 0
-            #     seconds = 0
-            #     for part in stop_time_split:
-            #         if 'min' in part:
-            #             minutes = int(part.replace('min', ''))
-            #         elif 's' in part:
-            #             seconds = int(part.replace('s', ''))
-            #     stop_time_delta = timedelta(minutes=minutes, seconds=seconds)
-            #     if stop_time:
-            #         stop_time += stop_time_delta
+                for each in carData:
+                    count = Passenger.objects.filter(car__id=each['id']).aggregate(
+                        Count('amount'))['amount__count']
+                    passenger = PassengerCount(
+                        carId=dashboardData, time=each['arrivalTime'], passengerCount=count)
+                    passenger.save()
 
-            # if not pd.isna(row['Post travel time']):
-            #     post_travel_time_delta = timedelta()
-            #     post_travel_time_str = row['Post travel time']
-            #     post_travel_time_split = post_travel_time_str.split()
-            #     minutes = 0
-            #     seconds = 0
-            #     for part in post_travel_time_split:
-            #         if 'min' in part:
-            #             minutes = int(part.replace('min', ''))
-            #         elif 's' in part:
-            #             seconds = int(part.replace('s', ''))
-            #     post_travel_time_delta = timedelta(minutes=minutes, seconds=seconds)
-            #     if post_travel_time:
-            #         post_travel_time += post_travel_time_delta
+                # clear state
+                maxWaitedTime = 0
+                totalEmptyTripLength = 0
+                totalServiceLength = 0
+                totalPostTravelTime = timedelta()
+                totalStopTime = timedelta()
+                carId = nextRow["Number"]
 
-            # if not pd.isna(row['Time spent at charging area']):
-            #     charging_time_delta = timedelta()
-            #     charging_time_str = row['Time spent at charging area']
-            #     charging_time_split = charging_time_str.split()
-            #     minutes = 0
-            #     seconds = 0
-            #     for part in charging_time_split:
-            #         if 'min' in part:
-            #             minutes = int(part.replace('min', ''))
-            #         elif 's' in part:
-            #             seconds = int(part.replace('s', ''))
-            #     charging_time_delta = timedelta(minutes=minutes, seconds=seconds)
-            #     if charging_time:
-            #         charging_time += charging_time_delta
+            if idx == len(df) - 1:
+                break
+            isProfilePoint = row["Is profile point"] == '1'
+            if isProfilePoint:
+                post_travel_time_str = row["Post travel time"]
+                if not pd.isna(row["Post travel time"]):
+                    post_travel_time_split = post_travel_time_str.split()
+                    minutes = 0
+                    seconds = 0
+                    for part in post_travel_time_split:
+                        if 'min' in part:
+                            minutes = int(part.replace('min', ''))
+                        elif 's' in part:
+                            seconds = int(part.replace('s', ''))
+                    totalPostTravelTime += timedelta(minutes=minutes,
+                                                     seconds=seconds)
+
+                stop_time_str = row["Stop time"]
+                if not pd.isna(row["Stop time"]):
+                    stop_time_split = stop_time_str.split()
+                    minutes = 0
+                    seconds = 0
+                    for part in stop_time_split:
+                        if 'min' in part:
+                            minutes = int(part.replace('min', ''))
+                        elif 's' in part:
+                            seconds = int(part.replace('s', ''))
+                    totalStopTime += timedelta(minutes=minutes,
+                                               seconds=seconds)
+
+            if not pd.isna(row["EMPTYTRIPLENGTH"]):
+                totalEmptyTripLength += float(row["EMPTYTRIPLENGTH"])
+            if not pd.isna(row["EMPTYTRIPLENGTH"]):
+                totalServiceLength += float(row["SERVICELENGTH"])
 
             row = nextRow
-        dashboardData = DashboardData(totalArrivalTime=arrival_time, totalDepartureTime=departure_time, totalChargingTime=charging_time,
-                                      totalPostTravelTime=post_travel_time, totalStopTime=stop_time)
-        dashboardData.save()
-        # dashboard = DashboardData.objects.all()
-        dashboard_serializer = DashboardSerializer(dashboardData)
+
+        dashboard = DashboardData.objects.all()
+        dashboard_serializer = DashboardSerializer(dashboard, many=True)
         return Response({'message': 'Success', 'data': dashboard_serializer.data}, status=status.HTTP_201_CREATED)
 
 
@@ -382,3 +504,24 @@ def passenger_check(request):
         return Response({'count': unserveCount, 'data': car_serializer.data}, status=status.HTTP_201_CREATED)
     elif request.method == 'POST':
         return
+
+
+@api_view(['GET', 'POST'])
+def station_time(request):
+    if request.method == 'GET':
+        return Response()
+    elif request.method == 'POST':
+        data = request.FILES['excel_file']
+        df = pd.read_excel(data, sheet_name=0, dtype=str)
+        dt = datetime(2024, 1, 1, 00, 00, 00)
+        row_iterator = df.iterrows()
+        for _, row in row_iterator:
+            departureTime = datetime.strptime(
+                row['Departure time'], "%H:%M:%S").time()
+            stationTime = StationTime(
+                carId=row["Number"], stationTime=departureTime)
+            stationTime.save()
+        stationTimes = StationTime.objects.all()
+        stationTimes_serializer = StationTimeSerializer(
+            stationTimes, many=True)
+        return Response({'message': 'Success', "data": stationTimes_serializer.data}, status=status.HTTP_201_CREATED)

@@ -21,14 +21,14 @@ class LinkSerializer(serializers.ModelSerializer):
         model = Link
         fields = ['nodeFrom', 'nodeTo', 'geom']
 
+
 class CarPropertiesSerializer(serializers.ModelSerializer):
     passengers = PassengerSerializer(many=True, read_only=True)
-    link = LinkSerializer()
 
     class Meta:
         model = CarProperties
         fields = ['carId', 'nodeFrom', 'status', 'battery', 'time',
-                 'arrivalTime', 'departureTime', 'lastChargeTime', 'passengerChange','passengers', 'passedLink']
+                  'arrivalTime', 'departureTime', 'lastChargeTime','stopTime', 'passengerChange', 'travelDistance', 'passengers', 'passedLink']
 
 
 class CarSerializer(serializers.ModelSerializer):
@@ -38,10 +38,12 @@ class CarSerializer(serializers.ModelSerializer):
         model = Car
         fields = ["type", "properties", 'geometry']
 
+
 class RoutePropertiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = RouteProperties
         fields = ['time', 'nodeNo']
+
 
 class RouteSerializer(serializers.ModelSerializer):
     properties = RoutePropertiesSerializer(read_only=True)
@@ -50,14 +52,35 @@ class RouteSerializer(serializers.ModelSerializer):
         model = Route
         fields = ["type", "properties", 'geometry']
 
+
 class DemandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Demand
         fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
 
 
+class ChargeLapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChargeLap
+        fields = ['lap', 'timeArrival', 'timeCharged']
+
+
+class PassengerCountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PassengerCount
+        fields = ["time", "passengerCount"]
+
+
 class DashboardSerializer(serializers.ModelSerializer):
+    chargeLap = ChargeLapSerializer(many=True, read_only=True)
+    passengerData = PassengerCountSerializer(many=True, read_only=True)
+
     class Meta:
         model = DashboardData
-        fields = ['totalArrivalTime', 'totalDepartureTime',
-                  'totalChargingTime', 'totalStopTime', 'totalPostTravel']
+        fields = ['carId', 'totalPostTravelTime', 'totalStopTime',
+                  'totalEmptyTripLength', 'totalServiceLength', "maxWaitedTime", 'chargeLap', 'passengerData']
+
+class StationTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StationTime
+        fields = "__all__"
