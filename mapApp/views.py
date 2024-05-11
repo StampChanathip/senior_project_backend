@@ -103,7 +103,7 @@ def handle_passenger():
 
 def handle_dashboard(data):
     DashboardData.objects.all().delete()
-    dt = datetime.now()
+    dt = datetime(2024, 1, 1, 00, 00, 00)
     df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
     row_iterator = df.iterrows()
     _, row = next(row_iterator)
@@ -126,6 +126,24 @@ def handle_dashboard(data):
             )
             dashboardData.save()
 
+            carData = CarProperties.objects.filter(carId=carId).values()
+            carChargeData = CarProperties.objects.filter(
+                carId=carId, status="charging").values()
+            lap = 1
+            for each in carChargeData:
+                chargeLap = ChargeLap(car=dashboardData, lap=str(
+                    lap), timeArrival=each['arrivalTime'], timeCharged=each['stopTime'])
+                chargeLap.save()
+                lap += 1
+
+            for each in carData:
+                count = Passenger.objects.filter(car__id=each['id']).aggregate(
+                    Count('amount'))['amount__count']
+                passenger = PassengerCount(
+                    carId=dashboardData, time=each['arrivalTime'], passengerCount=count)
+                passenger.save()
+
+            # clear state
             maxWaitedTime = 0
             totalEmptyTripLength = 0
             totalServiceLength = 0
@@ -139,7 +157,6 @@ def handle_dashboard(data):
         if isProfilePoint:
             post_travel_time_str = row["Post travel time"]
             if not pd.isna(row["Post travel time"]):
-                # print(post_travel_time_str)
                 post_travel_time_split = post_travel_time_str.split()
                 minutes = 0
                 seconds = 0
@@ -182,7 +199,6 @@ def car_detail(request):
 
     elif request.method == 'POST':
         Car.objects.all().delete()
-        # Passenger.objects.all().delete()
 
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
@@ -192,9 +208,11 @@ def car_detail(request):
         distance = 0
         positions = []
         stopTime = dt.time()
-        
-        startTime = StationTime.objects.filter(carId="1").values()[0]["stationTime"]
-        stationDepartTime = timedelta(hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
+
+        startTime = StationTime.objects.filter(
+            carId="1").values()[0]["stationTime"]
+        stationDepartTime = timedelta(
+            hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
         row_iterator = df.iterrows()
         _, row = next(row_iterator)
         lastChargeTime = (dt + stationDepartTime)
@@ -204,8 +222,10 @@ def car_detail(request):
             if isNewCar:
                 positions = []
                 distance = 0
-                startTime = StationTime.objects.filter(carId=nextRow["Number"]).values()[0]["stationTime"]
-                stationDepartTime = timedelta(hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
+                startTime = StationTime.objects.filter(
+                    carId=nextRow["Number"]).values()[0]["stationTime"]
+                stationDepartTime = timedelta(
+                    hours=startTime.hour, minutes=startTime.minute, seconds=startTime.second)
                 lastChargeTime = (dt + stationDepartTime)
 
             isProfilePoint = row["Is profile point"] == '1'
@@ -293,6 +313,7 @@ def car_detail(request):
         # CarProperties.objects.bulk_create(carProps)
         RouteProperties.objects.bulk_create(routeProps)
         handle_passenger()
+        handle_dashboard(data)
 
         car1 = Car.objects.all().order_by('properties__time')
         car_serializer = CarSerializer(car1, many=True)
@@ -374,7 +395,7 @@ def dashboard(request):
 
     elif request.method == 'POST':
         DashboardData.objects.all().delete()
-        dt = datetime.now()
+        dt = datetime(2024, 1, 1, 00, 00, 00)
         data = request.FILES['excel_file']
         df = pd.read_excel(data, sheet_name=0, dtype=str, skiprows=6)
         row_iterator = df.iterrows()
@@ -392,7 +413,7 @@ def dashboard(request):
             if isNewCar or idx == len(df) - 1:
                 maxWaitedTime = Passenger.objects.filter(
                     car__carId=carId).aggregate(Max("waitedTime"))['waitedTime__max']
-
+                print(totalPostTravelTime)
                 dashboardData = DashboardData(
                     carId=carId, totalStopTime=(dt + totalStopTime).time(), totalPostTravelTime=(dt + totalPostTravelTime).time(),
                     totalEmptyTripLength=totalEmptyTripLength, totalServiceLength=totalServiceLength, maxWaitedTime=maxWaitedTime
@@ -410,8 +431,10 @@ def dashboard(request):
                     lap += 1
 
                 for each in carData:
-                    count = Passenger.objects.filter(car__id=each['id']).aggregate(Count('amount'))['amount__count']
-                    passenger = PassengerCount(carId=dashboardData, time=each['arrivalTime'], passengerCount=count)
+                    count = Passenger.objects.filter(car__id=each['id']).aggregate(
+                        Count('amount'))['amount__count']
+                    passenger = PassengerCount(
+                        carId=dashboardData, time=each['arrivalTime'], passengerCount=count)
                     passenger.save()
 
                 # clear state
@@ -482,6 +505,7 @@ def passenger_check(request):
     elif request.method == 'POST':
         return
 
+
 @api_view(['GET', 'POST'])
 def station_time(request):
     if request.method == 'GET':
@@ -493,9 +517,11 @@ def station_time(request):
         row_iterator = df.iterrows()
         for _, row in row_iterator:
             departureTime = datetime.strptime(
-                        row['Departure time'], "%H:%M:%S").time()
-            stationTime = StationTime(carId=row["Number"], stationTime=departureTime)
+                row['Departure time'], "%H:%M:%S").time()
+            stationTime = StationTime(
+                carId=row["Number"], stationTime=departureTime)
             stationTime.save()
         stationTimes = StationTime.objects.all()
-        stationTimes_serializer = StationTimeSerializer(stationTimes, many=True)
+        stationTimes_serializer = StationTimeSerializer(
+            stationTimes, many=True)
         return Response({'message': 'Success', "data": stationTimes_serializer.data}, status=status.HTTP_201_CREATED)
