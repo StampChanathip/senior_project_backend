@@ -6,7 +6,7 @@ from mapApp.views import *
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', car_detail),
-    path('passenger', passenger_detail),
+    path('chargeHistory', chargeHistory_detail),
     path('route', route_detail),
     path('link', link_detail),
     path('demand', demand_detail),

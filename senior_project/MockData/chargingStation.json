@@ -1,0 +1,90 @@
+[
+  {
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [100.52287826176608, 13.739723076847634]
+    },
+    "properties": {
+      "NO": 99821,
+      "CODE": "CS1",
+      "NAME": "CS1",
+      "TYPENO": "2",
+      "CONTROLT~1": "0",
+      "XCOORD": 100.5228782618,
+      "YCOORD": 13.7397230768,
+      "T0PRT": "0min",
+      "VOLPRT": 0,
+      "SCTYPE": "",
+      "CHARGING~2": "1",
+      "OSM_NODE~3": "",
+      "PUDO": "0"
+    }
+  },
+  {
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [100.52585894556694, 13.744213526676143]
+    },
+    "properties": {
+      "NO": 99827,
+      "CODE": "CS2",
+      "NAME": "CS",
+      "TYPENO": "2",
+      "CONTROLT~1": "0",
+      "XCOORD": 100.5258589456,
+      "YCOORD": 13.7442135267,
+      "T0PRT": "0min",
+      "VOLPRT": 0,
+      "SCTYPE": "",
+      "CHARGING~2": "1",
+      "OSM_NODE~3": "",
+      "PUDO": "0"
+    }
+  },
+  {
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [100.52366371023128, 13.74479226226551]
+    },
+    "properties": {
+      "NO": 99828,
+      "CODE": "CS3",
+      "NAME": "CS3",
+      "TYPENO": "2",
+      "CONTROLT~1": "0",
+      "XCOORD": 100.5236637102,
+      "YCOORD": 13.7447922623,
+      "T0PRT": "0min",
+      "VOLPRT": 0,
+      "SCTYPE": "",
+      "CHARGING~2": "1",
+      "OSM_NODE~3": "",
+      "PUDO": "0"
+    }
+  },
+  {
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [100.52751555417184, 13.744178048029855]
+    },
+    "properties": {
+      "NO": 99829,
+      "CODE": "CS4",
+      "NAME": "CS4",
+      "TYPENO": "2",
+      "CONTROLT~1": "0",
+      "XCOORD": 100.5275155542,
+      "YCOORD": 13.744178048,
+      "T0PRT": "0min",
+      "VOLPRT": 0,
+      "SCTYPE": "",
+      "CHARGING~2": "1",
+      "OSM_NODE~3": "",
+      "PUDO": "0"
+    }
+  }
+]

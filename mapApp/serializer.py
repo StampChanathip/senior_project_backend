@@ -62,7 +62,7 @@ class DemandSerializer(serializers.ModelSerializer):
 class ChargeLapSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChargeLap
-        fields = ['lap', 'timeArrival', 'timeCharged']
+        fields = ['lap', 'timeArrival', 'timeCharged',"stationId"]
 
 
 class PassengerCountSerializer(serializers.ModelSerializer):

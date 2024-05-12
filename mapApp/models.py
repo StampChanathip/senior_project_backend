@@ -35,7 +35,6 @@ class CarProperties(models.Model):
     stopTime=models.TimeField(default=datetime.now, blank=True)
     passedLink = LineStringField()
 
-
 class Passenger(models.Model):
     car = models.ForeignKey(
         CarProperties, related_name='passengers', on_delete=models.CASCADE, default=1)
@@ -83,7 +82,11 @@ class ChargeLap(models.Model):
     lap = models.CharField(max_length=20, default="1")
     timeArrival = models.TimeField(default=datetime.now, blank=True)
     timeCharged = models.TimeField(default=datetime.now, blank=True)
+    stationId = models.CharField(max_length=20, default="1")
     
 class StationTime(models.Model):
     carId = models.CharField(max_length=20, default="1")
     stationTime = models.TimeField(default=datetime.now, blank=True)
+
+class ChargerHistory(models.Model):
+    stationId = models.CharField(max_length=20, default="1")
