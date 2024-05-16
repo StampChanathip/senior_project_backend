@@ -5,35 +5,82 @@ from . models import *
 class PassengerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Passenger
-        fields = ['waitedTime', 'origin',
-                  'destination', 'pickTime', 'dropTime', 'carId']
+        fields = ['nodeFrom', 'nodeTo',
+                  'amount', 'callTime', 'pickTime', 'dropTime', 'waitedTime']
 
 
-class CarSerializer(serializers.ModelSerializer):
+class PositionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Coordinates
+        fields = ['lat', 'lng']
+
+
+class LinkSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Link
+        fields = ['nodeFrom', 'nodeTo', 'geom']
+
+
+class CarPropertiesSerializer(serializers.ModelSerializer):
     passengers = PassengerSerializer(many=True, read_only=True)
 
     class Meta:
-        model = Car
-        fields = ['carId', 'node',
-                  'status', 'battery', 'passengers']
+        model = CarProperties
+        fields = ['carId', 'nodeFrom', 'status', 'battery', 'time',
+                  'arrivalTime', 'departureTime', 'lastChargeTime','stopTime', 'passengerChange', 'travelDistance', 'passengers', 'passedLink']
 
 
-class CoordinatesSerializer(serializers.ModelSerializer):
+class CarSerializer(serializers.ModelSerializer):
+    properties = CarPropertiesSerializer(read_only=True)
+
     class Meta:
-        model = Coordinates
-        fields = ['lattitude', 'longitude']
+        model = Car
+        fields = ["type", "properties", 'geometry']
+
+
+class RoutePropertiesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RouteProperties
+        fields = ['time', 'nodeNo']
 
 
 class RouteSerializer(serializers.ModelSerializer):
-    coordinates = CoordinatesSerializer(many=True, read_only=True)
+    properties = RoutePropertiesSerializer(read_only=True)
 
     class Meta:
         model = Route
-        fields = ['nodeNo', 'coordinates', 'density', 'timeStamp']
+        fields = ["type", "properties", 'geometry']
 
 
-class ImportSerializer(serializers.Serializer):
-    file = serializers.FileField()
+class DemandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Demand
+        fields = ['callTime', 'nodeFrom', 'nodeTo', 'amount']
+
+
+class ChargeLapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChargeLap
+        fields = ['lap', 'timeArrival', 'timeCharged',"stationId"]
+
+
+class PassengerCountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PassengerCount
+        fields = ["time", "passengerCount"]
+
+
+class DashboardSerializer(serializers.ModelSerializer):
+    chargeLap = ChargeLapSerializer(many=True, read_only=True)
+    passengerData = PassengerCountSerializer(many=True, read_only=True)
 
     class Meta:
-        fields = ['file']
+        model = DashboardData
+        fields = ['carId', 'totalPostTravelTime', 'totalStopTime',
+                  'totalEmptyTripLength', 'totalServiceLength', "maxWaitedTime", 'chargeLap', 'passengerData']
+
+class StationTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StationTime
+        fields = "__all__"
