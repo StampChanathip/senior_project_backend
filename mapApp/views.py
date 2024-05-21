@@ -62,9 +62,12 @@ def handle_passenger():
                                                desiredTime, car.arrivalTime], amount__range=[0, car.passengerChange]).order_by('-amount')
 
             for demand in pickDemand:
+                # if sum([passenger.amount for passenger in passengers]) >= 6: break
                 # check is there actually a car that drop this demand and get dropTime
+                upperDropTime = (dt.combine(dt, car.arrivalTime) +
+                                 timedelta(minutes=20)).time()
                 dropCar = CarProperties.objects.filter(nodeFrom=demand.nodeTo, arrivalTime__range=[
-                    car.arrivalTime, datetime(2024, 1, 1, 21, 30, 00).time()])
+                    car.arrivalTime, upperDropTime])
                 if dropCar:
                     pickCount += demand.amount
                     if pickCount > car.passengerChange:
@@ -83,21 +86,29 @@ def handle_passenger():
                     car.nodeFrom == each.nodeTo)
                 if (isCarDrop):
                     passengers.remove(each)
-            if dropCount != car.passengerChange:
+            longStopTime = (dt.combine(dt, car.stopTime)).time().minute > 1
+            if dropCount != car.passengerChange and longStopTime:
                 # Case: Pick and drop at the same node
                 desiredTime = (dt.combine(dt, car.departureTime) -
                                timedelta(minutes=10)).time()
                 pickDemand = Demand.objects.filter(nodeFrom=car.nodeFrom, callTime__range=[
                     desiredTime, car.departureTime], amount__range=[0, (car.passengerChange - dropCount)])
                 for demand in pickDemand:
-                    pickCount += demand.amount
-                    if pickCount > (car.passengerChange - dropCount):
-                        break
-                    waitedTime = (dt.combine(dt, car.departureTime) -
-                                  dt.combine(dt, demand.callTime)).total_seconds()
-                    passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
-                                          amount=demand.amount, callTime=demand.callTime, pickTime=car.departureTime, waitedTime=waitedTime)
-                    passengers.append(passenger)
+                    # if sum([passenger.amount for passenger in passengers]) >= 6 : break
+                    # check is there actually a car that drop this demand and get dropTime
+                    upperDropTime = (dt.combine(dt, car.arrivalTime) +
+                                     timedelta(minutes=20)).time()
+                    dropCar = CarProperties.objects.filter(nodeFrom=demand.nodeTo, arrivalTime__range=[
+                        car.arrivalTime, upperDropTime])
+                    if dropCar:
+                        pickCount += demand.amount
+                        if pickCount > (car.passengerChange - dropCount):
+                            break
+                        waitedTime = (dt.combine(dt, car.departureTime) -
+                                    dt.combine(dt, demand.callTime)).total_seconds()
+                        passenger = Passenger(car=car, nodeFrom=demand.nodeFrom, nodeTo=demand.nodeTo,
+                                            amount=demand.amount, callTime=demand.callTime, pickTime=car.departureTime, dropTime=dropCar[0].arrivalTime, waitedTime=waitedTime)
+                        passengers.append(passenger)
         Passenger.objects.bulk_create(passengers)
 
 
@@ -194,6 +205,7 @@ def car_detail(request):
 
     if request.method == 'GET':
         car = Car.objects.all().order_by('properties__time')
+        # car = Car.objects.all()
         car_serializer = CarSerializer(car, many=True)
         return Response(car_serializer.data)
 
